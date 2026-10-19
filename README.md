@@ -4,14 +4,18 @@ Real-time road alert Android app for Gauteng, South Africa. Built with Kotlin, F
 
 **Module:** XISD6329w | **Group 2** | Task 2: Mobile App Development
 
-## Team
+## Team and contributions
 
-| Name | Student number | Role |
-|---|---|---|
-| Neo Madima | ST10444163 | Lead Developer |
-| Mufhumudzi Rasilingwana | ST10441516 | Database |
-| Oluga Neluvhalani | ST10443034 | Project Manager |
-| Phathutshedzo Kevin Makherana | ST10438610 | UX / Tester |
+RouteWise SA was built by Group 2 for module XISD6329w. Each member's role and contribution is listed below.
+
+| Name | Student number | GitHub | Role | Contribution |
+|---|---|---|---|---|
+| Neo Madima | ST10444163 | [@neomadima](https://github.com/neomadima), [@neomadima47-a11y](https://github.com/neomadima47-a11y) | Lead Developer | The Android app (Kotlin) and the Sentinel admin website with its API. The website's original repository is [Sentinel-Command-Center](https://github.com/neomadima47-a11y/Sentinel-Command-Center), and its commit history is part of this repository. |
+| Mufhumudzi Rasilingwana | ST10441516 | [@mufhumudzi-rasilingwana](https://github.com/mufhumudzi-rasilingwana) | Database | Database design and records in Cloud Firestore, and the demonstration video. |
+| Oluga Neluvhalani | ST10443034 | [@OlugaNels](https://github.com/OlugaNels) | Project Manager | Azure DevOps board, meeting minutes, user documentation and the final document. Brought the app and website together in this repository, added Firebase authentication, input validation, unit tests, the GitHub Actions workflow and the free hosting setup. |
+| Phathutshedzo Kevin Makherana | ST10438610 | [@st10438610](https://github.com/st10438610) | UX / Tester | Test cases, invalid input testing, testing on a physical phone, app screenshots and the final quality check. |
+
+Neo Madima's original commits for the website are in this repository's history (see the commit "Merge the history of Neo Madima's Sentinel Command Center repository"). The commits on top of that were made while integrating and fixing the project.
 
 ## Live links
 
