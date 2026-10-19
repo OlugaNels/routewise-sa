@@ -31,7 +31,7 @@ class ChatbotFragment : Fragment() {
         binding.rvChatMessages.layoutManager = LinearLayoutManager(requireContext())
         binding.rvChatMessages.adapter = adapter
 
-        addMessage("ai", "Sawubona! I am your **RouteWise AI Road Assistant**. I can share road safety tips and load shedding advice. For live road reports, check the Alerts and Map tabs. How can I help you?")
+        addMessage("ai", "Sawubona! I am your RouteWise AI Road Assistant. I can share road safety tips and load shedding advice. For live road reports, check the Alerts and Map tabs. How can I help you?")
 
         binding.btnSendMessage.setOnClickListener {
             val text = binding.etChatInput.text.toString()
@@ -43,7 +43,7 @@ class ChatbotFragment : Fragment() {
                 binding.root.postDelayed({
                     val reply = when {
                         text.contains("robot", true) || text.contains("stop", true) -> 
-                            "🇿🇦 **When a traffic robot is dead in SA:** Treat it as a **4-Way Stop**! The first to stop has right of way."
+                            "🇿🇦 When a traffic robot is dead in SA: Treat it as a 4-Way Stop! The first to stop has right of way."
                         text.contains("n1", true) -> 
                             "I cannot look up live conditions yet. Open the Alerts tab and search for N1 to see reports from other drivers."
                         else -> "I can answer questions about road safety and load shedding. For live reports, use the Alerts and Map tabs. Drive safely!"
