@@ -1,0 +1,2315 @@
+<!doctype html>
+<html class="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sentinel — Command Center</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <script src="https://cdn.tailwindcss.com">
+    </script>
+    <script src="https://unpkg.com/lucide@latest">
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        /* ===== DESIGN TOKENS ===== */
+        :root {
+            --radius: 0.75rem;
+            --background: oklch(0.18 0.012 250);
+            --foreground: oklch(0.96 0.005 250);
+            --surface: oklch(0.22 0.014 250);
+            --surface-elevated: oklch(0.26 0.016 250);
+            --card: oklch(0.22 0.014 250 / 0.65);
+            --primary: oklch(0.74 0.18 50);
+            --primary-foreground: oklch(0.16 0.012 250);
+            --destructive: oklch(0.62 0.22 25);
+            --destructive-foreground: oklch(0.98 0 0);
+            --success: oklch(0.72 0.17 150);
+            --success-foreground: oklch(0.14 0.02 150);
+            --warning: oklch(0.84 0.16 90);
+            --muted-foreground: oklch(0.68 0.02 250);
+            --border: oklch(0.96 0.005 250 / 0.08);
+            --sidebar: oklch(0.16 0.012 250);
+            --sidebar-accent: oklch(0.24 0.016 250);
+            --grid-line: oklch(0.96 0.005 250 / 0.06);
+        }
+
+        /* ===== RESET & BASE ===== */
+        html,
+        body {
+            background: var(--background);
+            color: var(--foreground);
+            font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            margin: 0;
+            padding: 0;
+            height: 100%;
+        }
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+        }
+
+        .font-mono {
+            font-family: 'JetBrains Mono', ui-monospace, monospace;
+        }
+        .text-muted-foreground {
+            color: var(--muted-foreground);
+        }
+        .border-border {
+            border-color: var(--border);
+        }
+        .bg-background {
+            background-color: var(--background);
+        }
+        .bg-sidebar {
+            background-color: var(--sidebar);
+        }
+        .bg-surface {
+            background-color: var(--surface);
+        }
+        .bg-surface-elevated {
+            background-color: var(--surface-elevated);
+        }
+
+        /* ===== GLASS ===== */
+        .glass {
+            background: color-mix(in oklab, var(--surface) 60%, transparent);
+            backdrop-filter: blur(18px) saturate(140%);
+            -webkit-backdrop-filter: blur(18px) saturate(140%);
+            border: 1px solid var(--border);
+            box-shadow:
+                0 1px 0 0 color-mix(in oklab, white 6%, transparent) inset,
+                0 20px 40px -20px color-mix(in oklab, black 60%, transparent);
+        }
+        .glass-strong {
+            background: color-mix(in oklab, var(--surface-elevated) 75%, transparent);
+            backdrop-filter: blur(24px) saturate(160%);
+            -webkit-backdrop-filter: blur(24px) saturate(160%);
+            border: 1px solid var(--border);
+        }
+
+        /* ===== MAP ===== */
+        .map-grid {
+            background-image:
+                linear-gradient(var(--grid-line) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+
+        /* ===== ANIMATIONS ===== */
+        @keyframes pulse-ring {
+            0% {
+                transform: scale(0.8);
+                opacity: 0.7;
+            }
+            70% {
+                transform: scale(2.2);
+                opacity: 0;
+            }
+            100% {
+                transform: scale(2.2);
+                opacity: 0;
+            }
+        }
+        .pulse-ring {
+            animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes fadeSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(12px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .fade-slide-in {
+            animation: fadeSlideIn 0.35s ease-out forwards;
+        }
+
+        /* ===== TOAST ===== */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: var(--success);
+            color: var(--success-foreground);
+            padding: 12px 18px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 13px;
+            box-shadow: 0 12px 30px -10px rgba(0, 0, 0, .5);
+            transform: translateY(20px);
+            opacity: 0;
+            transition: all .25s ease;
+            z-index: 999;
+            max-width: 420px;
+        }
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        .toast.error {
+            background: var(--destructive);
+            color: var(--destructive-foreground);
+        }
+
+        /* ===== SCROLLBAR ===== */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--surface-elevated);
+            border-radius: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        /* ===== LOGIN SPECIFIC ===== */
+        .login-box {
+            max-width: 400px;
+            width: 100%;
+        }
+        .login-box .glass {
+            padding: 2rem;
+        }
+        .login-box input {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--foreground);
+            padding: 0.75rem 1rem;
+            border-radius: 0.75rem;
+            width: 100%;
+            font-size: 0.9rem;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .login-box input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px color-mix(in oklab, var(--primary) 30%, transparent);
+        }
+        .login-box .btn-login {
+            width: 100%;
+            padding: 0.75rem;
+            border: none;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            background: linear-gradient(90deg, var(--destructive), var(--primary));
+            color: white;
+            cursor: pointer;
+            transition: opacity 0.2s, transform 0.15s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        .login-box .btn-login:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .login-box .btn-login:not(:disabled):hover {
+            opacity: 0.92;
+        }
+        .login-box .btn-login:not(:disabled):active {
+            transform: scale(0.97);
+        }
+        .error-msg {
+            color: var(--destructive);
+            font-size: 0.8rem;
+            min-height: 1.2rem;
+            margin-top: 0.5rem;
+        }
+
+        /* ===== SIDEBAR ACTIVE STATE ===== */
+        .sidebar-btn-active {
+            background: color-mix(in oklab, var(--primary) 10%, transparent) !important;
+            color: var(--primary) !important;
+            --tw-ring-color: color-mix(in oklab, var(--primary) 30%, transparent) !important;
+        }
+
+        /* ===== UTILITY OVERRIDES ===== */
+        .hidden-page {
+            display: none !important;
+        }
+        .flex-center {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Responsive tweaks */
+        @media (max-width: 768px) {
+            .login-box .glass {
+                padding: 1.5rem;
+            }
+            .login-box {
+                max-width: 100%;
+                padding: 0 1rem;
+            }
+        }
+
+        /* ===== DASHBOARD LAYOUT ===== */
+        #dashboard-view {
+            display: none;
+            min-height: 100vh;
+            background: var(--background);
+        }
+        #dashboard-view.active {
+            display: flex;
+        }
+        #login-view {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: var(--background);
+            padding: 1rem;
+        }
+        #login-view.hidden {
+            display: none;
+        }
+
+        /* Map container markers */
+        .hazard-marker .pulse-ring {
+            animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        /* Sidebar nav button transitions */
+        aside nav button {
+            transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            color: var(--muted-foreground);
+            font-family: inherit;
+            font-size: 0.875rem;
+            font-weight: 500;
+            width: 100%;
+            text-align: left;
+            position: relative;
+        }
+        aside nav button:hover {
+            color: var(--foreground);
+        }
+        aside nav button .chevron-right {
+            margin-left: auto;
+            opacity: 0.6;
+        }
+
+        /* Header search */
+        .search-wrapper {
+            position: relative;
+        }
+        #global-search {
+            background: transparent;
+            border: none;
+            outline: none;
+            flex: 1;
+            color: var(--foreground);
+            font-size: 0.875rem;
+        }
+        #global-search::placeholder {
+            color: var(--muted-foreground);
+        }
+        #search-results {
+            display: none;
+            position: absolute;
+            top: calc(100% + 8px);
+            left: 0;
+            right: 0;
+            z-index: 60;
+            max-height: 320px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: var(--surface);
+            box-shadow: 0 16px 40px -18px rgba(0, 0, 0, 0.75);
+            padding: 6px 0;
+        }
+        #search-results.open {
+            display: block;
+        }
+        .result-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            border-bottom: 1px solid var(--border);
+        }
+        .result-item:last-child {
+            border-bottom: none;
+        }
+        .result-item:hover {
+            background: var(--surface-elevated);
+        }
+        .result-section-header {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--muted-foreground);
+            padding: 6px 16px 4px;
+            font-weight: 600;
+        }
+        .result-divider {
+            height: 1px;
+            background: var(--border);
+            margin: 6px 16px;
+        }
+        .province-highlight {
+            background: color-mix(in oklab, var(--primary) 15%, transparent);
+            border-radius: 6px;
+            padding: 4px 8px;
+            margin: 4px -8px;
+            transition: background 0.3s;
+        }
+        .highlight-bar {
+            box-shadow: 0 0 0 2px var(--primary), 0 0 12px color-mix(in oklab, var(--primary) 40%, transparent);
+        }
+        .province-bar {
+            cursor: pointer;
+            transition: transform 0.15s, filter 0.15s;
+        }
+        .province-bar:hover {
+            transform: scale(1.02);
+            filter: brightness(1.2);
+        }
+        .period-btn {
+            transition: all 0.2s;
+            cursor: pointer;
+            border: none;
+        }
+        .period-btn.active {
+            background: var(--primary);
+            color: var(--primary-foreground);
+        }
+        .period-btn:not(.active):hover {
+            background: var(--surface-elevated);
+        }
+        #province-analytics-panel {
+            transition: opacity 0.3s;
+        }
+        .badge {
+            font-size: 0.6rem;
+            text-transform: uppercase;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-weight: 600;
+        }
+        .badge.pending {
+            background: color-mix(in oklab, var(--warning) 20%, transparent);
+            color: var(--warning);
+        }
+        .badge.verified {
+            background: color-mix(in oklab, var(--success) 20%, transparent);
+            color: var(--success);
+        }
+        .badge.dismissed {
+            background: color-mix(in oklab, var(--destructive) 20%, transparent);
+            color: var(--destructive);
+        }
+        .no-results {
+            padding: 16px;
+            text-align: center;
+            color: var(--muted-foreground);
+            font-size: 0.875rem;
+        }
+
+        /* Stats cards */
+        .stat-card {
+            animation: fadeSlideIn 0.4s ease-out forwards;
+        }
+        .stat-card:nth-child(2) {
+            animation-delay: 0.08s;
+        }
+        .stat-card:nth-child(3) {
+            animation-delay: 0.16s;
+        }
+
+        /* Queue table */
+        #queue-section table {
+            border-collapse: collapse;
+        }
+        #queue-section th {
+            font-weight: 500;
+            text-transform: uppercase;
+            font-size: 0.6rem;
+            letter-spacing: 0.14em;
+            color: var(--muted-foreground);
+        }
+        #queue-section td {
+            vertical-align: middle;
+        }
+
+        /* Broadcast form */
+        #broadcast-form textarea {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--foreground);
+            border-radius: 0.75rem;
+            padding: 0.75rem 1rem;
+            font-size: 0.875rem;
+            resize: none;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            width: 100%;
+            font-family: inherit;
+        }
+        #broadcast-form textarea:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px color-mix(in oklab, var(--primary) 25%, transparent);
+        }
+        #broadcast-form textarea::placeholder {
+            color: var(--muted-foreground);
+        }
+
+        /* Responsive sidebar toggle (mobile) */
+        .mobile-sidebar-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 40;
+            backdrop-filter: blur(4px);
+        }
+        .mobile-sidebar-overlay.open {
+            display: block;
+        }
+        .mobile-sidebar-panel {
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            width: 280px;
+            background: var(--sidebar);
+            border-right: 1px solid var(--border);
+            z-index: 50;
+            transform: translateX(-100%);
+            transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+            padding: 1rem;
+            overflow-y: auto;
+        }
+        .mobile-sidebar-panel.open {
+            transform: translateX(0);
+        }
+
+        @media (min-width: 1024px) {
+            .mobile-sidebar-overlay,
+            .mobile-sidebar-panel {
+                display: none !important;
+            }
+            .lg\\:flex {
+                display: flex !important;
+            }
+        }
+        @media (max-width: 1023px) {
+            .lg\\:flex {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ============================================================ -->
+    <!-- LOGIN VIEW -->
+    <!-- ============================================================ -->
+    <div id="login-view">
+        <div class="login-box">
+            <div class="glass rounded-2xl">
+                <div class="flex items-center gap-3 mb-6">
+                    <div class="size-12 rounded-xl grid place-items-center" style="background: linear-gradient(135deg, var(--primary), var(--destructive));">
+                        <i data-lucide="radio" class="size-6" style="color: var(--primary-foreground)"></i>
+                    </div>
+                    <div>
+                        <div class="text-xl font-bold tracking-tight">SENTINEL</div>
+                        <div class="text-xs uppercase tracking-[0.18em] text-muted-foreground">Command Center</div>
+                    </div>
+                </div>
+
+                <form id="login-form">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Username</label>
+                            <input type="text" id="login-username" value="admin" required autocomplete="username">
+                        </div>
+                        <div>
+                            <label class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Password</label>
+                            <input type="password" id="login-password" value="sentinel" required autocomplete="current-password">
+                        </div>
+                        <div id="login-error" class="error-msg"></div>
+                        <button type="submit" class="btn-login" id="login-btn">
+                            <i data-lucide="log-in" class="size-4"></i> Sign In
+                        </button>
+                    </div>
+                </form>
+                <div class="mt-6 text-center text-[10px] text-muted-foreground">
+                    <span class="font-mono">v4.2 · Road Hazard Operations</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- DASHBOARD VIEW -->
+    <!-- ============================================================ -->
+    <div id="dashboard-view">
+        <div class="flex min-h-screen w-full">
+
+            <!-- ===== SIDEBAR (desktop) ===== -->
+            <aside class="hidden lg:flex w-64 shrink-0 flex-col border-r border-border bg-sidebar">
+                <div class="h-16 flex items-center gap-3 px-5 border-b border-border shrink-0">
+                    <div class="relative">
+                        <div class="size-9 rounded-lg grid place-items-center shadow-lg" style="background: linear-gradient(135deg, var(--primary), var(--destructive));">
+                            <i data-lucide="radio" class="size-5" style="color: var(--primary-foreground)"></i>
+                        </div>
+                        <span class="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full ring-2" style="background: var(--success); --tw-ring-color: var(--sidebar)"></span>
+                    </div>
+                    <div>
+                        <div class="text-sm font-semibold tracking-tight">SENTINEL</div>
+                        <div class="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Command Center</div>
+                    </div>
+                </div>
+                <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+                    <div class="px-2 pb-2 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Operations</div>
+                    <button data-page="live-map" class="w-full group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition sidebar-btn-active">
+                        <i data-lucide="map" class="size-4"></i><span class="flex-1 text-left">Live Map</span><i data-lucide="chevron-right" class="size-3.5 opacity-60 chevron-right"></i>
+                    </button>
+                    <button data-page="queue" class="w-full group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition text-muted-foreground hover:text-white">
+                        <i data-lucide="shield-check" class="size-4"></i><span class="flex-1 text-left">Moderation Queue</span><span id="queue-badge" class="text-[10px] font-semibold px-1.5 py-0.5 rounded-md" style="background: var(--destructive); color: var(--destructive-foreground)">0</span>
+                    </button>
+                    <button data-page="analytics" class="w-full group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition text-muted-foreground hover:text-white">
+                        <i data-lucide="bar-chart-3" class="size-4"></i><span class="flex-1 text-left">Analytics</span>
+                    </button>
+                    <button data-page="logs" class="w-full group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition text-muted-foreground hover:text-white">
+                        <i data-lucide="file-warning" class="size-4"></i><span class="flex-1 text-left">System Logs</span>
+                    </button>
+                    <button data-page="broadcast" class="w-full group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition text-muted-foreground hover:text-white">
+                        <i data-lucide="megaphone" class="size-4"></i><span class="flex-1 text-left">Broadcast Center</span>
+                    </button>
+                </nav>
+                <div class="m-3 p-3 rounded-xl glass text-xs shrink-0">
+                    <div class="flex items-center gap-2 mb-2"><i data-lucide="signal" class="size-3.5" style="color: var(--success)"></i><span class="font-semibold">Uplink Stable</span></div>
+                    <p class="text-muted-foreground leading-relaxed">12 field units online · 3 dispatch channels active</p>
+                </div>
+            </aside>
+
+            <!-- ===== MOBILE SIDEBAR OVERLAY & PANEL ===== -->
+            <div class="mobile-sidebar-overlay" id="mobile-overlay"></div>
+            <div class="mobile-sidebar-panel" id="mobile-panel">
+                <div class="flex items-center justify-between mb-6 pb-4 border-b border-border">
+                    <div class="flex items-center gap-3">
+                        <div class="size-9 rounded-lg grid place-items-center" style="background: linear-gradient(135deg, var(--primary), var(--destructive));">
+                            <i data-lucide="radio" class="size-5" style="color: var(--primary-foreground)"></i>
+                        </div>
+                        <div><div class="text-sm font-semibold tracking-tight">SENTINEL</div><div class="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Command Center</div></div>
+                    </div>
+                    <button id="mobile-close-btn" class="size-8 grid place-items-center rounded-lg hover:bg-surface text-muted-foreground"><i data-lucide="x" class="size-4"></i></button>
+                </div>
+                <nav class="space-y-1">
+                    <button data-page="live-map" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition sidebar-btn-active">
+                        <i data-lucide="map" class="size-4"></i><span class="flex-1 text-left">Live Map</span>
+                    </button>
+                    <button data-page="queue" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition text-muted-foreground hover:text-white">
+                        <i data-lucide="shield-check" class="size-4"></i><span class="flex-1 text-left">Moderation Queue</span><span id="mobile-queue-badge" class="text-[10px] font-semibold px-1.5 py-0.5 rounded-md" style="background: var(--destructive); color: var(--destructive-foreground)">0</span>
+                    </button>
+                    <button data-page="analytics" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition text-muted-foreground hover:text-white">
+                        <i data-lucide="bar-chart-3" class="size-4"></i><span class="flex-1 text-left">Analytics</span>
+                    </button>
+                    <button data-page="logs" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition text-muted-foreground hover:text-white">
+                        <i data-lucide="file-warning" class="size-4"></i><span class="flex-1 text-left">System Logs</span>
+                    </button>
+                    <button data-page="broadcast" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition text-muted-foreground hover:text-white">
+                        <i data-lucide="megaphone" class="size-4"></i><span class="flex-1 text-left">Broadcast Center</span>
+                    </button>
+                </nav>
+                <div class="mt-6 p-3 rounded-xl glass text-xs">
+                    <div class="flex items-center gap-2 mb-2"><i data-lucide="signal" class="size-3.5" style="color: var(--success)"></i><span class="font-semibold">Uplink Stable</span></div>
+                    <p class="text-muted-foreground leading-relaxed">12 field units online · 3 dispatch channels active</p>
+                </div>
+                <button id="mobile-logout-btn" class="mt-4 w-full text-center text-xs text-muted-foreground hover:text-white transition py-2 border-t border-border pt-4">Logout</button>
+            </div>
+
+            <!-- ===== MAIN CONTENT ===== -->
+            <div class="flex-1 flex flex-col min-w-0">
+
+                <!-- TOPBAR -->
+                <header class="h-16 shrink-0 border-b border-border px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30" style="background: color-mix(in oklab, var(--background) 60%, transparent); backdrop-filter: blur(16px);">
+                    <div class="flex items-center gap-3">
+                        <button id="mobile-menu-btn" class="size-9 grid place-items-center rounded-lg border border-border bg-surface lg:hidden text-muted-foreground hover:text-white transition">
+                            <i data-lucide="menu" class="size-4"></i>
+                        </button>
+                        <div>
+                            <h1 class="text-lg font-semibold tracking-tight">Live Operations</h1>
+                            <p class="text-xs text-muted-foreground font-mono">Real-time hazard intelligence · last sync <span id="last-sync">just now</span></p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 sm:gap-3">
+                        <div class="search-wrapper hidden md:flex items-center gap-2 px-3 h-9 rounded-lg border border-border bg-surface w-64 lg:w-72">
+                            <i data-lucide="search" class="size-3.5 text-muted-foreground"></i>
+                            <input id="global-search" placeholder="Search reports, roads, operators…" class="bg-transparent text-sm outline-none flex-1" style="color: var(--foreground)">
+                            <div id="search-results"></div>
+                            <kbd class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-surface-elevated text-muted-foreground">⌘K</kbd>
+                        </div>
+                        <button id="bell-btn" aria-label="Open notifications" aria-expanded="false" class="relative size-9 grid place-items-center rounded-lg border border-border bg-surface"><i data-lucide="bell" class="size-4"></i><span id="notification-indicator" class="absolute top-1.5 right-1.5 size-2 rounded-full" style="background: var(--destructive)"></span></button>
+                        <div class="flex items-center gap-2 pl-2 sm:pl-3 border-l border-border">
+                            <div class="size-8 rounded-full grid place-items-center text-xs font-semibold shrink-0" style="background: linear-gradient(135deg, var(--primary), var(--destructive)); color: var(--primary-foreground)">MP</div>
+                            <div class="hidden sm:block leading-tight"><div class="text-xs font-semibold" id="header-username">M. Pillay</div><div class="text-[10px] text-muted-foreground">Senior Operator</div></div>
+                            <button id="logout-btn" class="text-xs text-muted-foreground hover:text-white transition ml-1 sm:ml-3">Logout</button>
+                        </div>
+                    </div>
+                </header>
+
+                <section id="notification-panel" class="hidden fixed top-20 right-4 z-50 w-[min(24rem,calc(100vw-2rem))] max-h-[70vh] overflow-y-auto glass-strong rounded-xl shadow-2xl" aria-label="Live notifications">
+                    <div class="flex items-center justify-between px-4 py-3 border-b border-border">
+                        <h2 class="text-sm font-semibold">Live Notifications</h2>
+                        <button id="close-notifications" aria-label="Close notifications" class="size-7 grid place-items-center rounded-md hover:bg-white/10"><i data-lucide="x" class="size-4"></i></button>
+                    </div>
+                    <div class="px-4 py-3 border-b border-border flex items-center justify-between gap-3">
+                        <p id="push-status" class="text-xs text-muted-foreground">Browser alerts are off.</p>
+                        <button id="enable-web-alerts" class="shrink-0 inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-white/10"><i data-lucide="bell-ring" class="size-3.5"></i>Enable web alerts</button>
+                    </div>
+                    <div id="notification-list" class="divide-y divide-border">
+                        <p class="px-4 py-6 text-sm text-muted-foreground">Waiting for notifications…</p>
+                    </div>
+                </section>
+
+                <!-- MAIN -->
+                <main class="flex-1 p-4 sm:p-6 space-y-6">
+
+                    <!-- ===== PAGE: LIVE MAP ===== -->
+                    <div id="page-live-map" class="page-section">
+                        <section class="grid grid-cols-1 md:grid-cols-3 gap-4" id="stat-cards"></section>
+                        <section class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                            <div class="xl:col-span-2">
+                                <div class="glass rounded-2xl p-5 h-full flex flex-col">
+                                    <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+                                        <div><div class="flex items-center gap-2"><h2 class="text-base font-semibold tracking-tight">Global Hazard Map</h2><span id="firestore-sync-status" class="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded flex items-center gap-1.5" style="background: color-mix(in oklab, var(--warning) 15%, transparent); color: var(--warning)"><span class="size-1.5 rounded-full animate-pulse" style="background: currentColor"></span> Connecting</span></div><p class="text-xs text-muted-foreground mt-0.5 font-mono">South Africa · 29.0000° S · 24.0000° E · zoom 5</p></div>
+                                        <div class="flex items-center gap-3 text-xs flex-wrap">
+                                            <div class="flex items-center gap-1.5 text-muted-foreground"><span class="size-2 rounded-full" style="background: var(--destructive); box-shadow: 0 0 0 2px color-mix(in oklab, var(--destructive) 25%, transparent)"></span> Accidents</div>
+                                            <div class="flex items-center gap-1.5 text-muted-foreground"><span class="size-2 rounded-full" style="background: var(--primary); box-shadow: 0 0 0 2px color-mix(in oklab, var(--primary) 25%, transparent)"></span> Road Damage</div>
+                                            <div class="flex items-center gap-1.5 text-muted-foreground"><span class="size-2 rounded-full" style="background: var(--warning); box-shadow: 0 0 0 2px color-mix(in oklab, var(--warning) 25%, transparent)"></span> Congestion</div>
+                                        </div>
+                                    </div>
+                                    <div class="relative flex-1 min-h-[360px] sm:min-h-[420px] rounded-xl overflow-hidden border border-border bg-surface" id="map-container"></div>
+                                </div>
+                            </div>
+                            <div class="space-y-6">
+                                <div id="live-report-feed" class="glass rounded-2xl p-5"></div>
+                                <div id="province-chart" class="glass rounded-2xl p-5"></div>
+                                <div id="trend-chart" class="glass rounded-2xl p-5"></div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <!-- ===== PAGE: QUEUE ===== -->
+                    <div id="page-queue" class="page-section hidden-page">
+                        <section class="glass rounded-2xl overflow-hidden" id="queue-section"></section>
+                    </div>
+
+                    <!-- ===== PAGE: ANALYTICS ===== -->
+                    <div id="page-analytics" class="page-section hidden-page">
+                        <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div id="analytics-province" class="glass rounded-2xl p-5"></div>
+                            <div id="analytics-trend" class="glass rounded-2xl p-5"></div>
+                        </section>
+                        <section id="province-analytics-panel" class="glass rounded-2xl p-5 mt-6 hidden">
+                            <div class="flex items-center justify-between mb-4">
+                                <div>
+                                    <h3 class="text-base font-semibold tracking-tight" id="analytics-province-title">Province Analytics</h3>
+                                    <p class="text-xs text-muted-foreground" id="analytics-province-subtitle">Select a province to see detailed stats</p>
+                                </div>
+                                <button type="button" id="clear-province-selection" class="rounded-lg border border-border bg-surface px-3 py-2 text-xs font-medium text-muted-foreground hover:text-white">All provinces</button>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6" id="province-stats-cards">
+                                <div class="bg-surface rounded-xl p-4 text-center">
+                                    <div class="text-3xl font-bold tabular-nums" id="stat-today">0</div>
+                                    <div class="text-xs text-muted-foreground mt-1">Today</div>
+                                </div>
+                                <div class="bg-surface rounded-xl p-4 text-center">
+                                    <div class="text-3xl font-bold tabular-nums" id="stat-thisWeek">0</div>
+                                    <div class="text-xs text-muted-foreground mt-1">This Week</div>
+                                </div>
+                                <div class="bg-surface rounded-xl p-4 text-center">
+                                    <div class="text-3xl font-bold tabular-nums" id="stat-thisMonth">0</div>
+                                    <div class="text-xs text-muted-foreground mt-1">This Month</div>
+                                </div>
+                            </div>
+                            <div class="bg-surface rounded-xl p-4">
+                                <div class="flex justify-between items-center">
+                                    <div>
+                                        <div class="text-xs text-muted-foreground">Month-over-Month</div>
+                                        <div class="text-2xl font-bold tabular-nums" id="stat-monthly-comparison">0</div>
+                                        <div class="text-xs" id="stat-monthly-change">0% change</div>
+                                    </div>
+                                    <div class="flex items-center gap-6 text-sm">
+                                        <div><span class="text-muted-foreground">This month</span> <span class="font-bold" id="stat-this-month-count">0</span></div>
+                                        <div><span class="text-muted-foreground">Last month</span> <span class="font-bold" id="stat-last-month-count">0</span></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="bg-surface rounded-xl p-4 mt-4">
+                                <div class="flex items-center justify-between gap-3 mb-3">
+                                    <h4 class="text-sm font-semibold" id="province-report-list-title">Province Reports</h4>
+                                    <span class="text-xs text-muted-foreground" id="province-report-count">0 reports</span>
+                                </div>
+                                <div id="province-report-list" class="space-y-2">
+                                    <p class="text-xs text-muted-foreground">Select a province to view its reports.</p>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <!-- ===== PAGE: LOGS ===== -->
+                    <div id="page-logs" class="page-section hidden-page">
+                        <div class="glass rounded-2xl p-8 text-center text-muted-foreground">
+                            <i data-lucide="file-warning" class="size-12 mx-auto mb-4"></i>
+                            <h3 class="text-lg font-semibold">System Logs</h3>
+                            <p>Real-time audit trail will appear here.</p>
+                            <p class="text-xs mt-2">No recent events.</p>
+                        </div>
+                    </div>
+
+                    <!-- ===== PAGE: BROADCAST ===== -->
+                    <div id="page-broadcast" class="page-section hidden-page">
+                        <section class="glass rounded-2xl p-5 relative overflow-hidden">
+                            <div class="absolute -top-20 -left-20 size-60 rounded-full opacity-10 blur-3xl" style="background: var(--destructive)"></div>
+                            <form id="broadcast-form" class="relative grid grid-cols-1 lg:grid-cols-[260px_1fr_auto] gap-5 items-start">
+                                <div>
+                                    <div class="flex items-center gap-2" style="color: var(--destructive)">
+                                        <div class="size-9 rounded-xl grid place-items-center" style="background: color-mix(in oklab, var(--destructive) 15%, transparent)"><i data-lucide="megaphone" class="size-5"></i></div>
+                                        <div><h2 class="text-base font-semibold" style="color: var(--foreground)">Emergency Broadcast</h2><p class="text-xs text-muted-foreground">Push to all mobile devices</p></div>
+                                    </div>
+                                    <div class="mt-3 flex items-center gap-2 text-[10px] uppercase tracking-wider text-muted-foreground"><i data-lucide="zap" class="size-3" style="color: var(--warning)"></i> Reach · 2.4M handsets</div>
+                                </div>
+                                <div>
+                                    <label class="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Alert Message</label>
+                                    <textarea id="broadcast-msg" name="message" rows="3" maxlength="240" placeholder="e.g. Major accident on N1 northbound — expect 45 min delays. Use M5 alternate." class="mt-1.5 w-full bg-surface border border-border rounded-xl px-4 py-3 text-sm resize-none font-medium outline-none focus:ring-2" style="--tw-ring-color: var(--primary); color: var(--foreground)"></textarea>
+                                    <div class="mt-1.5 flex justify-between text-[10px] text-muted-foreground font-mono"><span>Signed: M. Pillay · Cape Town Ops</span><span id="char-count">0/240</span></div>
+                                </div>
+                                <div class="flex lg:flex-col gap-2 lg:items-stretch lg:w-52">
+                                    <button id="broadcast-btn" type="submit" disabled class="flex-1 inline-flex items-center justify-center gap-2 h-12 px-5 rounded-xl text-sm font-semibold text-white transition disabled:opacity-40 disabled:cursor-not-allowed" style="background: linear-gradient(90deg, var(--destructive), var(--primary)); box-shadow: 0 12px 24px -10px color-mix(in oklab, var(--destructive) 50%, transparent);"><i data-lucide="send" class="size-4"></i> Push to All Devices</button>
+                                    <button type="button" id="preview-btn" class="inline-flex items-center justify-center gap-2 h-10 px-4 rounded-xl text-xs font-medium border border-border bg-surface text-muted-foreground hover:text-white transition"><i data-lucide="gauge" class="size-3.5"></i> Preview</button>
+                                </div>
+                            </form>
+                        </section>
+                    </div>
+
+                    <!-- FOOTER -->
+                    <footer class="pt-2 pb-6 text-xs text-muted-foreground flex items-center justify-between flex-wrap gap-2">
+                        <span>Sentinel v4.2 · Road Hazard Operations</span>
+                        <span class="font-mono">UTC+02:00 · Operator: <span id="footer-username">M. Pillay</span></span>
+                    </footer>
+                </main>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- JAVASCRIPT -->
+    <!-- ============================================================ -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+
+            // ---- Helpers ----
+            function getToken() { return localStorage.getItem('sentinel_token'); }
+
+            function setToken(t) { if (t) localStorage.setItem('sentinel_token', t); }
+
+            function removeToken() { localStorage.removeItem('sentinel_token');
+                localStorage.removeItem('sentinel_user'); }
+
+            function getUser() { return localStorage.getItem('sentinel_user') || 'Operator'; }
+
+            function setUser(u) { if (u) localStorage.setItem('sentinel_user', u); }
+
+            function resolveApiUrl(path) {
+                if (!path) return path;
+                if (/^https?:\/\//i.test(path)) return path;
+                if (window.location.protocol === 'http:' || window.location.protocol === 'https:') {
+                    return window.location.origin + path;
+                }
+                return 'http://localhost:3000' + path;
+            }
+
+            function authFetch(url, opts) {
+                opts = opts || {};
+                const headers = opts.headers || {};
+                headers['Authorization'] = 'Bearer ' + getToken();
+                return fetch(resolveApiUrl(url), { ...opts,
+                    headers: headers });
+            }
+
+            async function fetchJSON(url, opts) {
+                const res = await authFetch(url, opts);
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                return res.json();
+            }
+
+            function timeAgo(ts) {
+                const diff = Math.floor(Date.now() / 1000 - ts);
+                if (diff < 60) return diff + 's ago';
+                if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+                if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+                return new Date(ts * 1000).toLocaleDateString();
+            }
+
+            function toast(msg, error) {
+                const t = document.createElement('div');
+                t.className = 'toast' + (error ? ' error' : '');
+                t.textContent = msg;
+                document.body.appendChild(t);
+                requestAnimationFrame(function() { t.classList.add('show'); });
+                setTimeout(function() {
+                    t.classList.remove('show');
+                    setTimeout(function() { t.remove(); }, 300);
+                }, 2600);
+            }
+            window.toast = toast;
+
+            // ---- DOM refs ----
+            var loginView = document.getElementById('login-view');
+            var dashboardView = document.getElementById('dashboard-view');
+            var loginForm = document.getElementById('login-form');
+            var loginUser = document.getElementById('login-username');
+            var loginPass = document.getElementById('login-password');
+            var loginError = document.getElementById('login-error');
+            var loginBtn = document.getElementById('login-btn');
+
+            var logoutBtn = document.getElementById('logout-btn');
+            var mobileLogoutBtn = document.getElementById('mobile-logout-btn');
+            var headerUser = document.getElementById('header-username');
+            var footerUser = document.getElementById('footer-username');
+            var lastSync = document.getElementById('last-sync');
+            var queueBadge = document.getElementById('queue-badge');
+            var mobileQueueBadge = document.getElementById('mobile-queue-badge');
+            var mobileMenuBtn = document.getElementById('mobile-menu-btn');
+            var mobileCloseBtn = document.getElementById('mobile-close-btn');
+            var mobileOverlay = document.getElementById('mobile-overlay');
+            var mobilePanel = document.getElementById('mobile-panel');
+            var searchInput = document.getElementById('global-search');
+            var searchResults = document.getElementById('search-results');
+            var allReports = [];
+            var provinceData = [];
+            var lastSelectedProvince = null;
+
+            function getCurrentProvinceCounts() {
+                if (typeof window.getSentinelProvinceCounts === 'function') {
+                    provinceData = window.getSentinelProvinceCounts();
+                    return Promise.resolve(provinceData);
+                }
+                return fetchJSON('/api/province').then(function(data) {
+                    provinceData = Array.isArray(data) ? data : [];
+                    return provinceData;
+                });
+            }
+
+            function fetchAllReports() {
+                fetchJSON('/api/reports').then(function(data) {
+                    allReports = Array.isArray(data) ? data : [];
+                }).catch(function(e) {
+                    console.warn('Could not fetch reports for search:', e);
+                });
+            }
+
+            function fetchProvinceData() {
+                getCurrentProvinceCounts().catch(function(e) {
+                    console.warn('Could not fetch province data:', e);
+                });
+            }
+
+            function performSearch(query) {
+                if (!searchResults) return;
+                if (!query || !query.trim()) {
+                    searchResults.classList.remove('open');
+                    return;
+                }
+                var q = query.toLowerCase().trim();
+                var reportMatches = allReports.filter(function(r) {
+                    return (r.road && r.road.toLowerCase().includes(q)) ||
+                        (r.city && r.city.toLowerCase().includes(q));
+                });
+                var provinceMatches = provinceData.filter(function(p) {
+                    return p && p.name && p.name.toLowerCase().includes(q);
+                });
+
+                if (reportMatches.length === 0 && provinceMatches.length === 0) {
+                    searchResults.innerHTML = '<div class="no-results">No incidents or provinces found for “' + q + '”</div>';
+                    searchResults.classList.add('open');
+                    return;
+                }
+
+                var html = '';
+                if (provinceMatches.length > 0) {
+                    html += '<div class="result-section-header">Provinces</div>';
+                    provinceMatches.forEach(function(p) {
+                        html += '<div class="result-item province-item" data-province="' + p.name + '"><div><span class="font-medium" style="color: var(--primary);">🏛️ ' + p.name + '</span><span class="text-muted-foreground text-sm"> · ' + p.value + ' reports</span></div><div class="flex items-center gap-3"><span class="text-xs text-muted-foreground">Click to view this province’s reports</span><i data-lucide="chevron-right" class="size-3.5 text-muted-foreground"></i></div></div>';
+                    });
+                }
+
+                if (reportMatches.length > 0) {
+                    if (provinceMatches.length > 0) html += '<div class="result-divider"></div>';
+                    html += '<div class="result-section-header">Incidents</div>';
+                    reportMatches.forEach(function(r) {
+                        var kindMap = { accident: 'Accident', pothole: 'Road Damage', traffic: 'Congestion' };
+                        var kindLabel = kindMap[r.kind] || r.kind;
+                        var statusClass = r.status === 'deleted' || r.status === 'dismissed' ? 'dismissed' : 'verified';
+                        var statusLabel = statusClass === 'dismissed' ? 'Deleted' : 'Active';
+                        html += '<div class="result-item report-item" data-report-id="' + r.id + '" data-status="' + (r.status || 'pending') + '"><div><span class="font-medium">' + kindLabel + '</span><span class="text-muted-foreground text-sm"> · ' + (r.road || '') + ', ' + (r.city || '') + '</span></div><div class="flex items-center gap-3"><span class="text-xs text-muted-foreground">' + timeAgo(r.time_reported) + '</span><span class="badge ' + statusClass + '">' + statusLabel + '</span></div></div>';
+                    });
+                }
+
+                searchResults.innerHTML = html;
+                lucide.createIcons();
+
+                document.querySelectorAll('.province-item').forEach(function(item) {
+                    item.addEventListener('click', function() {
+                        var province = this.dataset.province;
+                        searchResults.classList.remove('open');
+                        searchInput.value = '';
+                        switchPage('analytics');
+                        setTimeout(function() {
+                            selectProvince(province);
+                        }, 100);
+                    });
+                });
+
+                document.querySelectorAll('.report-item').forEach(function(item) {
+                item.addEventListener('click', function() {
+                    var reportId = this.dataset.reportId;
+                    searchResults.classList.remove('open');
+                        searchInput.value = '';
+                        switchPage('queue');
+                        window._highlightReportId = reportId;
+                        setTimeout(function() {
+                            loadQueue();
+                        }, 100);
+                    });
+                });
+
+                searchResults.classList.add('open');
+            }
+
+            if (searchInput && searchResults) {
+                searchInput.addEventListener('input', function(e) {
+                    var val = e.target.value;
+                    if (!val) {
+                        searchResults.classList.remove('open');
+                    } else {
+                        performSearch(val);
+                    }
+                });
+
+                searchInput.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        performSearch(searchInput.value);
+                    }
+                    if (e.key === 'Escape') {
+                        searchResults.classList.remove('open');
+                        searchInput.blur();
+                    }
+                });
+
+                document.addEventListener('click', function(e) {
+                    var wrapper = searchInput.closest('.search-wrapper');
+                    if (wrapper && !wrapper.contains(e.target)) {
+                        searchResults.classList.remove('open');
+                    }
+                });
+            }
+
+            // ---- Login logic ----
+            function showLogin() {
+                loginView.classList.remove('hidden');
+                dashboardView.classList.remove('active');
+                dashboardView.style.display = 'none';
+                loginView.style.display = 'flex';
+            }
+
+            function showDashboard() {
+                loginView.classList.add('hidden');
+                loginView.style.display = 'none';
+                dashboardView.style.display = 'flex';
+                dashboardView.classList.add('active');
+                // re-init lucide after showing
+                lucide.createIcons();
+                // load dashboard data
+                fetchAllReports();
+                fetchProvinceData();
+                loadStats();
+                loadMapMarkers();
+                loadProvinceChart('province-chart');
+                loadTrendChart('trend-chart');
+                updateUserUI();
+                // queue badge
+                fetchJSON('/api/stats').then(function(s) {
+                    var n = Number.isFinite(window.sentinelFirestoreReportCount)
+                        ? window.sentinelFirestoreReportCount
+                        : s.queueDepth || 0;
+                    queueBadge.textContent = n;
+                    mobileQueueBadge.textContent = n;
+                }).catch(function() {});
+                // start sync timer
+                if (!window._syncTimer) {
+                    window._syncTimer = setInterval(function() {
+                        lastSync.textContent = new Date().toLocaleTimeString();
+                    }, 10000);
+                }
+                // start auto-refresh
+                if (!window._refreshTimer) {
+                    window._refreshTimer = setInterval(autoRefresh, 30000);
+                }
+            }
+
+            function updateUserUI() {
+                var u = getUser();
+                headerUser.textContent = u;
+                footerUser.textContent = u;
+            }
+
+            // Check token on load
+            (function checkAuth() {
+                var tok = getToken();
+                if (tok) {
+                    // validate token
+                    fetch(resolveApiUrl('/api/me'), { headers: { 'Authorization': 'Bearer ' + tok } })
+                        .then(function(r) {
+                            if (r.ok) return r.json();
+                            throw new Error('invalid');
+                        })
+                        .then(function(data) {
+                            if (data.username) {
+                                setUser(data.username);
+                                showDashboard();
+                            } else { throw new Error('no user'); }
+                        })
+                        .catch(function() {
+                            removeToken();
+                            showLogin();
+                        });
+                } else {
+                    showLogin();
+                }
+            })();
+
+            // Login submit
+            loginForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                loginError.textContent = '';
+                loginBtn.disabled = true;
+                loginBtn.innerHTML = '<i data-lucide="loader-circle" class="size-4 inline animate-spin"></i> Signing in…';
+                lucide.createIcons();
+
+                var un = loginUser.value.trim();
+                var pw = loginPass.value.trim();
+
+                fetch(resolveApiUrl('/api/login'), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username: un, password: pw })
+                    })
+                    .then(function(res) { return res.json().then(function(d) { return { ok: res.ok, data: d }; }); })
+                    .then(function(result) {
+                        if (!result.ok) throw new Error(result.data.error || 'Login failed');
+                        setToken(result.data.token);
+                        setUser(result.data.username);
+                        showDashboard();
+                        toast('Welcome back, ' + result.data.username);
+                    })
+                    .catch(function(err) {
+                        loginError.textContent = err.message || 'Invalid credentials';
+                        loginBtn.disabled = false;
+                        loginBtn.innerHTML = '<i data-lucide="log-in" class="size-4"></i> Sign In';
+                        lucide.createIcons();
+                    });
+            });
+
+            // Logout
+            function doLogout() {
+                removeToken();
+                showLogin();
+                toast('Logged out');
+                // clear timers
+                if (window._refreshTimer) { clearInterval(window._refreshTimer);
+                    window._refreshTimer = null; }
+                if (window._syncTimer) { clearInterval(window._syncTimer);
+                    window._syncTimer = null; }
+            }
+            logoutBtn.addEventListener('click', doLogout);
+            mobileLogoutBtn.addEventListener('click', doLogout);
+
+            // ---- Mobile sidebar ----
+            function openMobile() {
+                mobileOverlay.classList.add('open');
+                mobilePanel.classList.add('open');
+                document.body.style.overflow = 'hidden';
+            }
+
+            function closeMobile() {
+                mobileOverlay.classList.remove('open');
+                mobilePanel.classList.remove('open');
+                document.body.style.overflow = '';
+            }
+            mobileMenuBtn.addEventListener('click', openMobile);
+            mobileCloseBtn.addEventListener('click', closeMobile);
+            mobileOverlay.addEventListener('click', closeMobile);
+
+            // ---- Page routing ----
+            var pages = {
+                'live-map': document.getElementById('page-live-map'),
+                'queue': document.getElementById('page-queue'),
+                'analytics': document.getElementById('page-analytics'),
+                'logs': document.getElementById('page-logs'),
+                'broadcast': document.getElementById('page-broadcast')
+            };
+            var sidebarBtns = document.querySelectorAll('aside nav button[data-page], #mobile-panel nav button[data-page]');
+
+            function switchPage(pageId) {
+                // hide all
+                Object.keys(pages).forEach(function(k) {
+                    pages[k].classList.add('hidden-page');
+                    pages[k].style.display = 'none';
+                });
+                if (pages[pageId]) {
+                    pages[pageId].classList.remove('hidden-page');
+                    pages[pageId].style.display = 'block';
+                }
+
+                // update desktop sidebar
+                document.querySelectorAll('aside nav button[data-page]').forEach(function(b) {
+                    b.classList.remove('sidebar-btn-active');
+                    b.style.background = 'transparent';
+                    b.style.color = '';
+                    var ch = b.querySelector('.chevron-right');
+                    if (ch) ch.remove();
+                });
+                var active = document.querySelector('aside nav button[data-page="' + pageId + '"]');
+                if (active) {
+                    active.classList.add('sidebar-btn-active');
+                    var ch = document.createElement('i');
+                    ch.setAttribute('data-lucide', 'chevron-right');
+                    ch.className = 'size-3.5 opacity-60 chevron-right';
+                    active.appendChild(ch);
+                }
+
+                // update mobile sidebar
+                document.querySelectorAll('#mobile-panel nav button[data-page]').forEach(function(b) {
+                    b.classList.remove('sidebar-btn-active');
+                    b.style.background = 'transparent';
+                    b.style.color = '';
+                });
+                var mActive = document.querySelector('#mobile-panel nav button[data-page="' + pageId + '"]');
+                if (mActive) {
+                    mActive.classList.add('sidebar-btn-active');
+                }
+
+                lucide.createIcons();
+                closeMobile();
+
+                // load data for page
+                if (pageId === 'queue') loadQueue();
+                if (pageId === 'analytics') {
+                    loadProvinceChart('analytics-province', lastSelectedProvince);
+                    if (lastSelectedProvince) {
+                        loadTrendChart('analytics-trend', null, lastSelectedProvince);
+                        loadProvinceAnalytics(lastSelectedProvince);
+                    } else {
+                        loadTrendChart('analytics-trend');
+                        loadProvinceAnalytics(null);
+                    }
+                }
+                if (pageId === 'live-map') { loadStats();
+                    loadMapMarkers();
+                    loadProvinceChart('province-chart');
+                    loadTrendChart('trend-chart'); }
+            }
+
+            sidebarBtns.forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var p = btn.dataset.page;
+                    if (p) switchPage(p);
+                });
+            });
+
+            // ---- Data functions ----
+            function loadStats() {
+                fetchJSON('/api/stats').then(function(stats) {
+                    var container = document.getElementById('stat-cards');
+                    container.innerHTML =
+                        '<div class="glass rounded-2xl p-5 relative overflow-hidden stat-card"><div class="absolute -top-16 -right-16 size-40 rounded-full opacity-20 blur-3xl" style="background: var(--primary)"></div><div class="flex items-start justify-between relative"><div><div class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground font-medium">Reports in Queue</div><div class="mt-3 flex items-end gap-3"><div class="text-5xl font-bold tracking-tight tabular-nums" style="color: var(--primary)">' +
+                        stats.queueDepth +
+                        '</div><span class="mb-1.5 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md flex items-center gap-1 ring-1" style="background: color-mix(in oklab, var(--destructive) 15%, transparent); color: var(--destructive); --tw-ring-color: color-mix(in oklab, var(--destructive) 30%, transparent)"><i data-lucide="alert-triangle" class="size-3"></i> Urgent</span></div><div class="mt-2 text-xs text-muted-foreground">+18 in the last hour</div></div><div class="size-10 grid place-items-center rounded-xl" style="background: color-mix(in oklab, var(--primary) 15%, transparent); color: var(--primary)"><i data-lucide="shield-check" class="size-5"></i></div></div></div>' +
+                        '<div class="glass rounded-2xl p-5 relative overflow-hidden stat-card"><div class="absolute -top-16 -right-16 size-40 rounded-full opacity-20 blur-3xl" style="background: var(--destructive)"></div><div class="flex items-start justify-between relative"><div><div class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground font-medium">Total Active Hazards</div><div class="mt-3 flex items-end gap-3"><div class="text-5xl font-bold tracking-tight tabular-nums" style="color: var(--destructive)">' +
+                        stats.active +
+                        '</div></div><div class="mt-2 text-xs text-muted-foreground">Live across 9 provinces</div></div><div class="size-10 grid place-items-center rounded-xl" style="background: color-mix(in oklab, var(--destructive) 15%, transparent); color: var(--destructive)"><i data-lucide="siren" class="size-5"></i></div></div></div>' +
+                        '<div class="glass rounded-2xl p-5 relative overflow-hidden stat-card"><div class="absolute -top-16 -right-16 size-40 rounded-full opacity-20 blur-3xl" style="background: var(--success)"></div><div class="flex items-start justify-between relative"><div class="flex-1"><div class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground font-medium">System Health</div><div class="mt-3 flex items-end gap-3"><div class="text-5xl font-bold tracking-tight tabular-nums" style="color: var(--success)">98.7<span class="text-2xl">%</span></div><div class="mb-2 flex items-center gap-2 text-xs font-medium" style="color: var(--success)"><span class="relative flex size-2.5"><span class="absolute inline-flex h-full w-full rounded-full opacity-75 pulse-ring" style="background: var(--success)"></span><span class="relative inline-flex rounded-full size-2.5" style="background: var(--success)"></span></span> All systems nominal</div></div><div class="mt-4 grid grid-cols-3 gap-2 text-[10px] uppercase tracking-wider text-muted-foreground"><div><div class="flex justify-between mb-1"><span>API</span><span class="font-mono" style="color: var(--foreground)">99%</span></div><div class="h-1 rounded-full overflow-hidden bg-surface-elevated"><div class="h-full rounded-full" style="width: 99%; background: var(--success)"></div></div></div><div><div class="flex justify-between mb-1"><span>Ingest</span><span class="font-mono" style="color: var(--foreground)">97%</span></div><div class="h-1 rounded-full overflow-hidden bg-surface-elevated"><div class="h-full rounded-full" style="width: 97%; background: var(--success)"></div></div></div><div><div class="flex justify-between mb-1"><span>Geo</span><span class="font-mono" style="color: var(--foreground)">100%</span></div><div class="h-1 rounded-full overflow-hidden bg-surface-elevated"><div class="h-full rounded-full" style="width: 100%; background: var(--success)"></div></div></div></div></div><div class="size-10 grid place-items-center rounded-xl" style="background: color-mix(in oklab, var(--success) 15%, transparent); color: var(--success)"><i data-lucide="activity" class="size-5"></i></div></div></div>';
+                    lucide.createIcons();
+                    var reportCount = Number.isFinite(window.sentinelFirestoreReportCount)
+                        ? window.sentinelFirestoreReportCount
+                        : stats.queueDepth;
+                    queueBadge.textContent = reportCount;
+                    mobileQueueBadge.textContent = reportCount;
+                    var pendingCardCount = container.querySelector('.stat-card .text-5xl');
+                    if (pendingCardCount) pendingCardCount.textContent = reportCount;
+                }).catch(function(e) { console.error(e); });
+            }
+
+            function loadQueue() {
+                if (window.renderFirestoreModerationQueue) {
+                    window.renderFirestoreModerationQueue();
+                    return;
+                }
+                fetchJSON('/api/queue').then(function(reports) {
+                    var container = document.getElementById('queue-section');
+                    container.replaceChildren();
+                    var header = document.createElement('div');
+                    header.className = 'p-5 flex items-center justify-between border-b border-border';
+                    var title = document.createElement('h2');
+                    title.className = 'text-base font-semibold tracking-tight';
+                    title.textContent = 'Moderation Queue';
+                    var count = document.createElement('span');
+                    count.className = 'text-xs text-muted-foreground';
+                    count.textContent = reports.length + ' reports';
+                    header.append(title, count);
+                    var tableWrap = document.createElement('div');
+                    tableWrap.className = 'overflow-x-auto';
+                    var table = document.createElement('table');
+                    table.className = 'w-full text-sm';
+                    table.innerHTML = '<thead><tr class="text-[10px] uppercase tracking-wider text-muted-foreground"><th class="text-left px-5 py-3">Incident</th><th class="text-left px-5 py-3">Location</th><th class="text-left px-5 py-3">Reported</th><th class="text-left px-5 py-3">Status</th><th class="text-right px-5 py-3">Actions</th></tr></thead>';
+                    var body = document.createElement('tbody');
+                    if (reports.length === 0) {
+                        var emptyRow = document.createElement('tr');
+                        var emptyCell = document.createElement('td');
+                        emptyCell.colSpan = 5;
+                        emptyCell.className = 'px-5 py-12 text-center text-sm text-muted-foreground';
+                        emptyCell.textContent = 'No reports yet. New reports from the app will appear here.';
+                        emptyRow.appendChild(emptyCell);
+                        body.appendChild(emptyRow);
+                    }
+                    reports.forEach(function(report) {
+                        var row = document.createElement('tr');
+                        row.className = 'border-t border-border';
+                        row.dataset.id = report.id;
+                        var values = [
+                            report.kind || 'Incident',
+                            (report.road || 'Unknown road') + ' · ' + (report.city || 'Unknown city'),
+                            timeAgo(report.time_reported),
+                            report.status === 'deleted' ? 'Deleted' : report.status || 'Active'
+                        ];
+                        values.forEach(function(value) {
+                            var cell = document.createElement('td');
+                            cell.className = 'px-5 py-4';
+                            cell.textContent = value;
+                            row.appendChild(cell);
+                        });
+                        var actionsCell = document.createElement('td');
+                        actionsCell.className = 'px-5 py-4 text-right';
+                        var deleteButton = document.createElement('button');
+                        deleteButton.type = 'button';
+                        deleteButton.className = 'rounded-md border border-border px-3 py-1.5 text-xs font-medium text-destructive disabled:opacity-50';
+                        deleteButton.textContent = report.status === 'deleted' ? 'Deleted' : 'Delete';
+                        deleteButton.disabled = report.status === 'deleted';
+                        deleteButton.addEventListener('click', function() {
+                            if (!window.confirm('Mark this report deleted? It will be permanently cleared when it is 12 hours old.')) return;
+                            deleteButton.disabled = true;
+                            authFetch('/api/delete', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ id: report.id })
+                            }).then(function(response) {
+                                if (!response.ok) throw new Error('Could not delete report');
+                                loadQueue();
+                                loadStats();
+                            }).catch(function(error) {
+                                console.error(error);
+                                deleteButton.disabled = false;
+                                toast(error.message, true);
+                            });
+                        });
+                        actionsCell.appendChild(deleteButton);
+                        row.appendChild(actionsCell);
+                        body.appendChild(row);
+                    });
+                    table.appendChild(body);
+                    tableWrap.appendChild(table);
+                    container.append(header, tableWrap);
+                    lucide.createIcons();
+
+                    if (window._highlightReportId) {
+                        var targetId = window._highlightReportId;
+                        var targetRow = document.querySelector('#queue-section tr[data-id="' + targetId + '"]');
+                        if (targetRow) {
+                            targetRow.style.transition = 'background 0.5s';
+                            targetRow.style.background = 'color-mix(in oklab, var(--primary) 30%, transparent)';
+                            targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            setTimeout(function() {
+                                targetRow.style.background = '';
+                            }, 3000);
+                        }
+                        window._highlightReportId = null;
+                    }
+
+                }).catch(function(e) { console.error(e); });
+            }
+
+            function loadMapMarkers() {
+                if (window.renderMapMarkers) window.renderMapMarkers();
+            }
+
+            function loadProvinceChart(containerId, highlightProvince) {
+                var container = document.getElementById(containerId);
+                if (!container) return;
+                getCurrentProvinceCounts().then(function(data) {
+                    var max = Math.max(1, ...data.map(function(d) { return d.value; }));
+                    var isAnalytics = containerId === 'analytics-province';
+                    var html = '<div class="flex items-center justify-between mb-4"><div><h3 class="text-sm font-semibold">Reports per Province</h3><p class="text-xs text-muted-foreground">Last 24 hours</p></div><i data-lucide="bar-chart-3" class="size-4 text-muted-foreground"></i></div><div class="space-y-2.5">';
+                    data.forEach(function(p) {
+                        var isHighlighted = highlightProvince && p.name === highlightProvince;
+                        var width = (p.value / max) * 100;
+                        var clickAttr = isAnalytics ? 'data-province="' + p.name + '" style="cursor:pointer;"' : '';
+                        html += '<div class="province-bar ' + (isHighlighted ? 'province-highlight' : '') + '" ' + clickAttr + '><div class="flex justify-between text-xs mb-1"><span class="text-muted-foreground">' + p.name + '</span><span class="font-mono">' + p.value + '</span></div><div class="h-2 rounded-full overflow-hidden bg-surface-elevated"><div class="h-full rounded-full bar-fill ' + (isHighlighted ? 'highlight-bar' : '') + '" style="width: ' + width + '%; background: linear-gradient(90deg, var(--primary), var(--destructive));"></div></div></div>';
+                    });
+                    html += '</div>';
+                    container.innerHTML = html;
+                    lucide.createIcons();
+                    if (isAnalytics) {
+                        container.querySelectorAll('.province-bar').forEach(function(el) {
+                            el.addEventListener('click', function() {
+                                var province = this.dataset.province;
+                                if (!province) return;
+                                selectProvince(province);
+                            });
+                        });
+                    }
+                    if (highlightProvince) {
+                        setTimeout(function() {
+                            var highlightEl = container.querySelector('.province-highlight');
+                            if (highlightEl) highlightEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }, 200);
+                    }
+                }).catch(function(e) { console.error(e); });
+            }
+
+            function selectProvince(province) {
+                lastSelectedProvince = province;
+                loadProvinceChart('analytics-province', province);
+                loadTrendChart('analytics-trend', null, province);
+                loadProvinceAnalytics(province);
+            }
+
+            window.refreshSentinelProvinceAnalytics = function() {
+                if (!lastSelectedProvince) return;
+                loadProvinceChart('analytics-province', lastSelectedProvince);
+                loadProvinceAnalytics(lastSelectedProvince);
+                loadTrendChart('analytics-trend', null, lastSelectedProvince);
+            };
+
+            function loadProvinceAnalytics(province) {
+                var panel = document.getElementById('province-analytics-panel');
+                if (!panel) return;
+                if (!province) {
+                    panel.classList.add('hidden');
+                    return;
+                }
+                panel.classList.remove('hidden');
+                document.getElementById('analytics-province-title').textContent = province + ' Analytics';
+                document.getElementById('analytics-province-subtitle').textContent = 'Reports and statistics for this province only';
+                var currentProvince = province;
+                var liveReports = typeof window.getSentinelProvinceReports === 'function'
+                    ? window.getSentinelProvinceReports(province)
+                    : null;
+                var reportsPromise = liveReports !== null
+                    ? Promise.resolve(liveReports)
+                    : fetch(resolveApiUrl('/api/province-analytics/' + encodeURIComponent(province)), {
+                        headers: { 'Authorization': 'Bearer ' + getToken() }
+                    }).then(function(res) {
+                        if (!res.ok) throw new Error('HTTP ' + res.status);
+                        return res.json();
+                    }).then(function(data) {
+                        return data.reports || [];
+                    });
+                reportsPromise.then(function(reports) {
+                    if (lastSelectedProvince !== currentProvince) return;
+                    renderProvinceReportAnalytics(currentProvince, reports);
+                }).catch(function(error) {
+                    console.error('Could not load province reports:', error);
+                    if (lastSelectedProvince === currentProvince) {
+                        document.getElementById('province-report-list').textContent = 'Could not load reports for this province.';
+                        toast('Could not load analytics for ' + currentProvince, true);
+                    }
+                });
+            }
+
+            function getReportTimeMilliseconds(report) {
+                var value = report.timestamp || report.createdAt || report.created_at || report.time_reported;
+                if (value && typeof value.toDate === 'function') return value.toDate().getTime();
+                if (typeof value === 'number') return value < 1e12 ? value * 1000 : value;
+                if (typeof value === 'string') {
+                    var parsed = Date.parse(value);
+                    return Number.isNaN(parsed) ? null : parsed;
+                }
+                return null;
+            }
+
+            function renderProvinceReportAnalytics(province, reports) {
+                var now = new Date();
+                var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+                var weekStart = todayStart - 6 * 24 * 60 * 60 * 1000;
+                var monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+                var previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
+                var timestamps = reports.map(function(report) {
+                    return getReportTimeMilliseconds(report);
+                });
+                var countFrom = function(start, end) {
+                    return timestamps.filter(function(timestamp) {
+                        return timestamp !== null && timestamp >= start && (end === undefined || timestamp < end);
+                    }).length;
+                };
+                var thisMonth = countFrom(monthStart);
+                var lastMonth = countFrom(previousMonthStart, monthStart);
+                var change = lastMonth === 0 ? 0 : Math.round(((thisMonth - lastMonth) / lastMonth) * 100);
+                document.getElementById('stat-today').textContent = countFrom(todayStart);
+                document.getElementById('stat-thisWeek').textContent = countFrom(weekStart);
+                document.getElementById('stat-thisMonth').textContent = thisMonth;
+                document.getElementById('stat-this-month-count').textContent = thisMonth;
+                document.getElementById('stat-last-month-count').textContent = lastMonth;
+                var changeElement = document.getElementById('stat-monthly-change');
+                changeElement.textContent = (change >= 0 ? '+' : '') + change + '% change';
+                changeElement.style.color = change >= 0 ? 'var(--success)' : 'var(--destructive)';
+                document.getElementById('stat-monthly-comparison').textContent = thisMonth + ' vs ' + lastMonth;
+
+                var list = document.getElementById('province-report-list');
+                document.getElementById('province-report-list-title').textContent = province + ' Reports';
+                document.getElementById('province-report-count').textContent = reports.length + (reports.length === 1 ? ' report' : ' reports');
+                list.replaceChildren();
+                if (reports.length === 0) {
+                    var emptyMessage = document.createElement('p');
+                    emptyMessage.className = 'text-xs text-muted-foreground';
+                    emptyMessage.textContent = 'No reports for ' + province + '.';
+                    list.appendChild(emptyMessage);
+                    return;
+                }
+
+                reports.slice().sort(function(left, right) {
+                    return (getReportTimeMilliseconds(right) || 0) - (getReportTimeMilliseconds(left) || 0);
+                }).forEach(function(report) {
+                    var item = document.createElement('article');
+                    item.className = 'rounded-lg border border-border p-3';
+                    var title = document.createElement('div');
+                    title.className = 'text-sm font-medium';
+                    title.textContent = (report.type || report.kind || 'Incident') + ' · ' + (report.roadName || report.road || 'Unknown road');
+                    var details = document.createElement('p');
+                    details.className = 'mt-1 text-xs text-muted-foreground';
+                    details.textContent = [report.city, report.statusBox || report.status || 'Reported'].filter(Boolean).join(' · ');
+                    item.append(title, details);
+                    var timestamp = getReportTimeMilliseconds(report);
+                    if (timestamp !== null) {
+                        var time = document.createElement('time');
+                        time.className = 'mt-1 block text-[10px] text-muted-foreground';
+                        time.dateTime = new Date(timestamp).toISOString();
+                        time.textContent = new Date(timestamp).toLocaleString();
+                        item.appendChild(time);
+                    }
+                    list.appendChild(item);
+                });
+            }
+
+            function loadTrendChart(containerId, dataArray, provinceName) {
+                var container = document.getElementById(containerId);
+                if (!container) return;
+                if (provinceName) {
+                    if (typeof window.getSentinelProvinceReports === 'function') {
+                        var provinceReports = window.getSentinelProvinceReports(provinceName);
+                        var today = new Date();
+                        var start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                        var dailyCounts = Array(14).fill(0);
+                        provinceReports.forEach(function(report) {
+                            var timestamp = getReportTimeMilliseconds(report);
+                            if (timestamp === null) return;
+                            var ageInDays = Math.floor((start.getTime() - new Date(timestamp).setHours(0, 0, 0, 0)) / (24 * 60 * 60 * 1000));
+                            if (ageInDays >= 0 && ageInDays < dailyCounts.length) {
+                                dailyCounts[dailyCounts.length - 1 - ageInDays] += 1;
+                            }
+                        });
+                        renderTrendChart(container, dailyCounts, provinceName);
+                        return;
+                    }
+                    fetch(resolveApiUrl('/api/trend/' + encodeURIComponent(provinceName)), {
+                        headers: { 'Authorization': 'Bearer ' + getToken() }
+                    }).then(function(res) { return res.json(); }).then(function(trendData) {
+                        renderTrendChart(container, trendData, provinceName);
+                    }).catch(function(e) {
+                        console.error(e);
+                        container.innerHTML = '<div class="text-center text-muted-foreground">Could not load trend for ' + provinceName + '</div>';
+                    });
+                    return;
+                }
+                fetchJSON('/api/trend').then(function(data) {
+                    renderTrendChart(container, data, null);
+                }).catch(function(e) { console.error(e); });
+            }
+
+            function renderTrendChart(container, data, provinceName) {
+                if (!Array.isArray(data) || data.length === 0) {
+                    container.textContent = 'No trend data available.';
+                    return;
+                }
+                var max = Math.max.apply(null, data);
+                var min = Math.min.apply(null, data);
+                var range = max - min || 1;
+                var w = 280,
+                    h = 90;
+                var pts = data.map(function(v, i) {
+                    var x = data.length === 1 ? w / 2 : (i / (data.length - 1)) * w;
+                    var y = h - ((v - min) / range) * h;
+                    return x + ',' + y;
+                });
+                var pointsStr = pts.join(' ');
+                var areaStr = '0,' + h + ' ' + pointsStr + ' ' + w + ',' + h;
+                var title = provinceName ? 'Trend for ' + provinceName : 'Incident Trend';
+                container.innerHTML =
+                    '<div class="flex items-center justify-between mb-3"><div><h3 class="text-sm font-semibold">' + title + '</h3><p class="text-xs text-muted-foreground">14-day rolling window</p></div><div class="flex items-center gap-1 text-xs font-medium" style="color: var(--success)"><i data-lucide="trending-up" class="size-3.5"></i> +24.6%</div></div><svg viewBox="0 0 ' +
+                    w + ' ' + h +
+                    '" class="w-full h-24"><defs><linearGradient id="trendFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="oklch(0.74 0.18 50 / 0.35)" /><stop offset="1" stop-color="oklch(0.74 0.18 50 / 0)" /></linearGradient></defs><polygon fill="url(#trendFill)" points="' +
+                    areaStr +
+                    '" /><polyline fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="' +
+                    pointsStr +
+                    '" />' +
+                    data.map(function(v, i) {
+                        var x = data.length === 1 ? w / 2 : (i / (data.length - 1)) * w;
+                        var y = h - ((v - min) / range) * h;
+                        return '<circle cx="' + x + '" cy="' + y +
+                            '" r="1.8" fill="var(--primary)" />';
+                    }).join('') +
+                    '</svg><div class="mt-2 flex justify-between text-[10px] font-mono text-muted-foreground"><span>' +
+                    new Date(Date.now() - (data.length - 1) * 86400000).toLocaleDateString() +
+                    '</span><span>' +
+                    new Date(Date.now() - Math.floor((data.length - 1) / 2) * 86400000).toLocaleDateString() +
+                    '</span><span>' + new Date().toLocaleDateString() + '</span></div>';
+                lucide.createIcons();
+            }
+
+            document.getElementById('clear-province-selection').addEventListener('click', function() {
+                lastSelectedProvince = null;
+                loadProvinceChart('analytics-province');
+                loadTrendChart('analytics-trend');
+                loadProvinceAnalytics(null);
+            });
+
+            // ---- Broadcast ----
+            var bForm = document.getElementById('broadcast-form');
+            if (bForm) {
+                var bText = document.getElementById('broadcast-msg');
+                var bCounter = document.getElementById('char-count');
+                var bBtn = document.getElementById('broadcast-btn');
+                bText.addEventListener('input', function() {
+                    bCounter.textContent = bText.value.length + '/240';
+                    bBtn.disabled = !bText.value.trim();
+                });
+                bForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    var msg = bText.value.trim();
+                    if (!msg) return;
+                    authFetch('/api/broadcast', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: msg })
+                    }).then(function(res) { return res.json(); }).then(function(json) {
+                        if (json.ok) {
+                            bBtn.innerHTML = '<i data-lucide="check" class="size-4"></i> Broadcast Sent';
+                            lucide.createIcons();
+                            toast('Alert pushed to ' + json.reach + ' devices');
+                            bText.value = '';
+                            bCounter.textContent = '0/240';
+                            setTimeout(function() {
+                                bBtn.innerHTML =
+                                    '<i data-lucide="send" class="size-4"></i> Push to All Devices';
+                                lucide.createIcons();
+                                bBtn.disabled = true;
+                            }, 2400);
+                        } else throw new Error('Broadcast failed');
+                    }).catch(function() { toast('Broadcast failed', true); });
+                });
+                document.getElementById('preview-btn').addEventListener('click', function() {
+                    var msg = bText.value || '(empty)';
+                    toast('Preview: ' + msg.substring(0, 50) + (msg.length > 50 ? '…' : ''));
+                });
+            }
+
+            // ---- Misc UI ----
+            document.getElementById('bell-btn').addEventListener('click', function() {
+                var panel = document.getElementById('notification-panel');
+                var isOpen = panel.classList.toggle('hidden') === false;
+                this.setAttribute('aria-expanded', String(isOpen));
+            });
+            document.getElementById('close-notifications').addEventListener('click', function() {
+                document.getElementById('notification-panel').classList.add('hidden');
+                document.getElementById('bell-btn').setAttribute('aria-expanded', 'false');
+            });
+
+            document.addEventListener('keydown', function(e) {
+                if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                    e.preventDefault();
+                    var inp = document.getElementById('global-search');
+                    if (inp) { inp.focus();
+                        toast('Search focused'); }
+                }
+            });
+
+            // ---- Auto-refresh ----
+            function autoRefresh() {
+                var visible = document.querySelector('.page-section:not(.hidden-page)');
+                if (visible) {
+                    var id = visible.id;
+                    if (id === 'page-live-map') { loadStats();
+                        loadMapMarkers();
+                        loadProvinceChart('province-chart');
+                        loadTrendChart('trend-chart'); } else if (id === 'page-queue') loadQueue();
+                    else if (id === 'page-analytics') {
+                        loadProvinceChart('analytics-province', lastSelectedProvince);
+                        if (lastSelectedProvince) {
+                            loadTrendChart('analytics-trend', null, lastSelectedProvince);
+                            loadProvinceAnalytics(lastSelectedProvince);
+                        } else {
+                            loadTrendChart('analytics-trend');
+                        }
+                    }
+                }
+            }
+
+            // ---- Init ----
+            lucide.createIcons();
+
+            // If dashboard is already shown (from token check), data loads inside showDashboard()
+            // If not, login is shown.
+
+        });
+    </script>
+
+    <script type="module">
+        import { db, app, firebaseConfigReady } from './firebase.js';
+        import { collection, onSnapshot, query, orderBy, doc, updateDoc, deleteDoc, writeBatch, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js';
+        import { initSentinelLiveStream, upvoteIncidentFromWeb } from './firestoreService.js?v=20261016-all-reports';
+        import { requestWebNotificationPermission, listenToForegroundNotifications } from './notificationService.js';
+        import L from 'https://esm.sh/leaflet@1.9.4';
+
+        const firestore = db;
+        const map = L.map('map-container').setView([-29, 24], 5);
+        const incidentMarkers = L.featureGroup().addTo(map);
+        let renderedIncidentIds = '';
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors',
+            maxZoom: 19
+        }).addTo(map);
+
+        window.firebaseApp = app;
+
+        // Global data store
+        let allIncidents = [];
+        let allUsers = [];
+        let allNotifications = [];
+        const provinceCityAliases = {
+            'western-cape': ['cape town', 'stellenbosch', 'george', 'mossel bay', 'paarl', 'saldanha'],
+            gauteng: ['johannesburg', 'pretoria', 'soweto', 'benoni', 'vanderbijlpark', 'germiston', 'sandton', 'centurion', 'midrand'],
+            'kwazulu-natal': ['durban', 'pietermaritzburg', 'richards bay', 'ballito', 'newcastle', 'pinetown'],
+            'eastern-cape': ['port elizabeth', 'gqeberha', 'east london', 'mthatha', 'grahamstown', 'queenstown', 'qonce', 'mdantsane'],
+            'free-state': ['bloemfontein', 'welkom', 'sasolburg', 'bethlehem', 'kroonstad'],
+            limpopo: ['polokwane', 'mokopane', 'musina', 'thohoyandou', 'tzaneen', 'makhado'],
+            mpumalanga: ['mbombela', 'middelburg', 'ermelo', 'witbank', 'emalahleni', 'secunda'],
+            'north-west': ['mafikeng', 'mahikeng', 'rustenburg', 'klerksdorp', 'potchefstroom'],
+            'northern-cape': ['kimberley', 'upington', 'springbok', 'de aar']
+        };
+        const supportedProvinces = [
+            ['Western Cape', 'western-cape'],
+            ['Gauteng', 'gauteng'],
+            ['KwaZulu-Natal', 'kwazulu-natal'],
+            ['Eastern Cape', 'eastern-cape'],
+            ['Free State', 'free-state'],
+            ['Limpopo', 'limpopo'],
+            ['Mpumalanga', 'mpumalanga'],
+            ['North West', 'north-west'],
+            ['Northern Cape', 'northern-cape']
+        ];
+        const automaticApprovalsInFlight = new Set();
+        const reportExpirationsInFlight = new Set();
+        const expiredReportsPendingRemoval = new Map();
+        let hasShownExpiryError = false;
+        let incidentSyncState = { connected: false, source: 'starting' };
+        const pushStatus = document.getElementById('push-status');
+        const enableWebAlertsButton = document.getElementById('enable-web-alerts');
+
+        function normalizeProvinceName(value) {
+            const normalized = String(value || '').toLowerCase().trim().replace(/[_\s]+/g, '-').replace(/-province$/, '');
+            return normalized === 'kzn' ? 'kwazulu-natal' : normalized;
+        }
+
+        function incidentBelongsToProvince(report, provinceName) {
+            const province = normalizeProvinceName(provinceName);
+            const explicitProvince = normalizeProvinceName(report.province || report.provinceName || report.location?.province);
+            if (explicitProvince) return explicitProvince === province;
+            const city = String(report.city || '').toLowerCase();
+            return (provinceCityAliases[province] || []).some((alias) => city.includes(alias));
+        }
+
+        window.getSentinelProvinceReports = (provinceName) => allIncidents
+            .filter((report) => incidentBelongsToProvince(report, provinceName));
+        window.getSentinelProvinceCounts = () => supportedProvinces.map(([name, key]) => ({
+            name,
+            value: allIncidents.filter((report) => incidentBelongsToProvince(report, key)).length
+        }));
+
+        function normalizeTimestamp(value) {
+            if (value && typeof value.toDate === 'function') return value.toDate().toISOString();
+            if (typeof value === 'number') return new Date(value < 1e12 ? value * 1000 : value).toISOString();
+            return value;
+        }
+
+        if (!firebaseConfigReady) {
+            pushStatus.textContent = 'Add Firebase Web app credentials to connect live reports and alerts.';
+            enableWebAlertsButton.disabled = true;
+            updateUI();
+        } else {
+            // 2. LISTEN FOR FIRESTORE INCIDENTS
+            initSentinelLiveStream((incidents) => {
+                allIncidents = incidents;
+                expireOldReports(false);
+                automaticallyApprovePendingIncidents(allIncidents);
+                updateUI();
+                if (window.refreshSentinelProvinceAnalytics) {
+                    window.refreshSentinelProvinceAnalytics();
+                }
+                console.log('Sentinel Command Center: Live Reports Received:', allIncidents);
+                allIncidents.forEach((report) => {
+                    console.log(`Report: ${report.type || report.kind || 'Incident'} on ${report.roadName || report.road || 'Unknown road'} (${report.city || 'Unknown city'})`);
+                    console.log(`GPS: ${report.latitude ?? report.location?.latitude ?? 'n/a'}, ${report.longitude ?? report.location?.longitude ?? 'n/a'} | Upvotes: ${Number(report.upvotes) || 0}`);
+                });
+            }, (error) => {
+                console.error('Could not subscribe to Firestore incidents:', error);
+            }, (state) => {
+                incidentSyncState = state;
+                renderIncidentSyncStatus();
+            });
+            setInterval(() => expireOldReports(), 60_000);
+
+            listenToForegroundNotifications((payload) => {
+                const alert = payload.notification || payload.data || {};
+                toast(`LIVE ROAD ALERT: ${alert.title || 'RouteWise SA Alert'}\n${alert.body || 'A traffic alert was received.'}`);
+            });
+
+            // 3. LISTEN FOR USERS AND NOTIFICATIONS
+            onSnapshot(collection(firestore, 'users'), (snapshot) => {
+                allUsers = snapshot.docs.map((userDoc) => ({ id: userDoc.id, ...userDoc.data() }));
+                updateUI();
+            }, (error) => {
+                console.error('Could not subscribe to Firestore users:', error);
+            });
+
+            const notificationsQuery = query(collection(firestore, 'notifications'), orderBy('timestamp', 'desc'));
+            onSnapshot(notificationsQuery, (snapshot) => {
+                allNotifications = snapshot.docs.map((notificationDoc) => {
+                    const data = notificationDoc.data();
+                    return { id: notificationDoc.id, ...data, timestamp: normalizeTimestamp(data.timestamp) };
+                });
+                updateUI();
+            }, (error) => {
+                console.error('Could not subscribe to Firestore notifications:', error);
+            });
+        }
+
+        if (!firebaseConfigReady) {
+            enableWebAlertsButton.title = 'Configure Firebase credentials and Web Push VAPID key first.';
+        } else if (!('Notification' in window)) {
+            pushStatus.textContent = 'This browser does not support web alerts.';
+            enableWebAlertsButton.disabled = true;
+        } else if (Notification.permission === 'granted') {
+            pushStatus.textContent = 'Browser permission is already enabled.';
+        } else if (Notification.permission === 'denied') {
+            pushStatus.textContent = 'Web alerts are blocked in browser settings.';
+        }
+
+        enableWebAlertsButton.addEventListener('click', async () => {
+            enableWebAlertsButton.disabled = true;
+            pushStatus.textContent = 'Requesting browser permission…';
+            try {
+                const token = await requestWebNotificationPermission();
+                if (token) {
+                    window.routewiseWebPushToken = token;
+                    pushStatus.textContent = 'Web alerts enabled on this browser.';
+                    enableWebAlertsButton.textContent = 'Enabled';
+                } else {
+                    pushStatus.textContent = 'Browser permission was not granted.';
+                    enableWebAlertsButton.disabled = false;
+                }
+            } catch (error) {
+                pushStatus.textContent = error.message;
+                enableWebAlertsButton.disabled = false;
+            }
+        });
+
+        // 4. MAIN UI UPDATE FUNCTION
+        function updateUI() {
+            renderStats();
+            renderMapMarkers();
+            renderLiveReportFeed();
+            renderQueue();
+            renderProvinceChart();
+            renderNotifications();
+            document.getElementById('last-sync').textContent = new Date().toLocaleTimeString();
+        }
+
+        function reportTimestampMilliseconds(value) {
+            if (value && typeof value.toDate === 'function') return value.toDate().getTime();
+            if (typeof value === 'number') return value < 1e12 ? value * 1000 : value;
+            if (typeof value === 'string') {
+                const parsed = Date.parse(value);
+                return Number.isNaN(parsed) ? null : parsed;
+            }
+            return null;
+        }
+
+        function getReportExpiryTimestamp(report) {
+            const timestamp = report.timestamp || report.createdAt || report.created_at || report.time_reported;
+            return reportTimestampMilliseconds(timestamp);
+        }
+
+        function expireOldReports(updateAfterExpiry = true) {
+            const expiryCutoff = Date.now() - 12 * 60 * 60 * 1000;
+            const expiredReports = allIncidents.filter((report) => {
+                const timestamp = getReportExpiryTimestamp(report);
+                return timestamp !== null && timestamp <= expiryCutoff;
+            });
+            if (expiredReports.length > 0) {
+                const expiredIds = new Set(expiredReports.map((report) => report.id));
+                expiredReports.forEach((report) => expiredReportsPendingRemoval.set(report.id, report));
+                allIncidents = allIncidents.filter((report) => !expiredIds.has(report.id));
+                if (updateAfterExpiry) updateUI();
+            }
+
+            expiredReportsPendingRemoval.forEach((report, reportId) => {
+                if (reportExpirationsInFlight.has(reportId)) return;
+                reportExpirationsInFlight.add(reportId);
+                deleteDoc(doc(firestore, 'incidents', reportId))
+                    .then(() => expiredReportsPendingRemoval.delete(reportId))
+                    .catch((error) => {
+                        console.error(`Could not expire report ${reportId}:`, error);
+                        if (!hasShownExpiryError) {
+                            toast(`Could not remove expired report ${report.report_id || reportId}: ${error.message}`, true);
+                            hasShownExpiryError = true;
+                        }
+                    })
+                    .finally(() => reportExpirationsInFlight.delete(reportId));
+            });
+        }
+
+        function automaticallyApprovePendingIncidents(incidents) {
+            const pendingReports = incidents.filter((report) =>
+                isPendingModeration(report) && !automaticApprovalsInFlight.has(report.id)
+            );
+
+            pendingReports.forEach((report) => {
+                automaticApprovalsInFlight.add(report.id);
+                allIncidents = allIncidents.map((incident) => incident.id === report.id
+                    ? { ...incident, status: 'approved', statusBox: 'Automatically approved' }
+                    : incident);
+
+                updateDoc(doc(firestore, 'incidents', report.id), {
+                    status: 'approved',
+                    statusBox: 'Automatically approved',
+                    approvedAt: serverTimestamp(),
+                    approvedBy: 'Automatic approval'
+                }).catch((error) => {
+                    console.error(`Could not automatically approve report ${report.id}:`, error);
+                    allIncidents = allIncidents.map((incident) => incident.id === report.id
+                        ? report
+                        : incident);
+                    updateUI();
+                    toast(`Automatic approval failed for ${report.report_id || report.id}: ${error.message}`, true);
+                }).finally(() => {
+                    automaticApprovalsInFlight.delete(report.id);
+                });
+            });
+        }
+
+        function renderIncidentSyncStatus() {
+            const indicator = document.getElementById('firestore-sync-status');
+            if (!indicator) return;
+            const connected = incidentSyncState.connected;
+            const color = connected ? 'var(--success)' : 'var(--destructive)';
+            indicator.style.color = color;
+            indicator.style.background = `color-mix(in oklab, ${color} 15%, transparent)`;
+            indicator.textContent = connected
+                ? `Synced · ${allIncidents.length} reports`
+                : 'Sync interrupted · retrying';
+            indicator.title = incidentSyncState.error?.message || `Source: ${incidentSyncState.source}`;
+        }
+
+        function renderLiveReportFeed() {
+            const container = document.getElementById('live-report-feed');
+            if (!container) return;
+
+            container.replaceChildren();
+            const liveReports = allIncidents.filter((report) => String(report.status || '').toLowerCase() !== 'deleted');
+            const header = document.createElement('div');
+            header.className = 'flex items-center justify-between gap-3 mb-3';
+            const title = document.createElement('h2');
+            title.className = 'text-sm font-semibold';
+            title.textContent = 'Latest App Reports';
+            const count = document.createElement('span');
+            count.className = 'text-[11px] text-muted-foreground';
+            count.textContent = `${liveReports.length} total`;
+            header.append(title, count);
+            container.appendChild(header);
+
+            if (liveReports.length === 0) {
+                const empty = document.createElement('p');
+                empty.className = 'py-3 text-xs text-muted-foreground';
+                empty.textContent = 'Waiting for reports from drivers…';
+                container.appendChild(empty);
+                return;
+            }
+
+            const reports = liveReports.slice().sort((left, right) => {
+                const leftTime = new Date(left.timestamp || 0).getTime() || 0;
+                const rightTime = new Date(right.timestamp || 0).getTime() || 0;
+                return rightTime - leftTime;
+            });
+
+            reports.forEach((report) => {
+                const card = document.createElement('button');
+                card.type = 'button';
+                card.className = 'w-full text-left py-3 border-t border-border first:border-t-0 hover:bg-white/5 transition';
+                const titleLine = document.createElement('span');
+                titleLine.className = 'block text-xs font-medium';
+                titleLine.textContent = `${report.type || report.kind || 'Incident'} · ${report.roadName || report.road || 'Unknown road'}`;
+                const locationLine = document.createElement('span');
+                locationLine.className = 'mt-1 block text-[11px] text-muted-foreground';
+                locationLine.textContent = `${report.city || 'Unknown city'}${report.province ? `, ${report.province}` : ''} · ${report.statusBox || report.status || 'Received'}`;
+                const metaLine = document.createElement('span');
+                metaLine.className = 'mt-1 block text-[10px] text-muted-foreground';
+                const reportedAt = report.timestamp ? new Date(report.timestamp) : null;
+                const timeText = reportedAt && !Number.isNaN(reportedAt.getTime()) ? reportedAt.toLocaleString() : 'Time unavailable';
+                metaLine.textContent = `${timeText} · ${Number(report.upvotes) || 0} upvotes`;
+                card.append(titleLine, locationLine, metaLine);
+                card.addEventListener('click', () => {
+                    const latitude = Number(report.latitude ?? report.location?.latitude);
+                    const longitude = Number(report.longitude ?? report.location?.longitude);
+                    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+                        map.flyTo([latitude, longitude], Math.max(map.getZoom(), 13), { duration: 0.6 });
+                    }
+                });
+                container.appendChild(card);
+            });
+
+            const queueButton = document.createElement('button');
+            queueButton.type = 'button';
+            queueButton.className = 'mt-2 w-full rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-white/10 transition';
+            queueButton.textContent = 'Open full report queue';
+            queueButton.addEventListener('click', () => {
+                document.querySelector('aside nav button[data-page="queue"]')?.click();
+            });
+            container.appendChild(queueButton);
+        }
+
+        function renderNotifications() {
+            const list = document.getElementById('notification-list');
+            const indicator = document.getElementById('notification-indicator');
+            if (!list || !indicator) return;
+
+            const deletedIncidentIds = new Set(allIncidents
+                .filter((incident) => String(incident.status || '').toLowerCase() === 'deleted')
+                .flatMap((incident) => [incident.id, incident.report_id].filter(Boolean)));
+            const visibleNotifications = allNotifications.filter((notification) => {
+                if (String(notification.type || '').toLowerCase() === 'report_deleted') return true;
+                const relatedIncidentId = notification.incidentId || notification.reportId || notification.report_id;
+                return !relatedIncidentId || !deletedIncidentIds.has(relatedIncidentId);
+            });
+
+            indicator.classList.toggle('hidden', visibleNotifications.length === 0);
+            if (visibleNotifications.length === 0) {
+                list.innerHTML = '<p class="px-4 py-6 text-sm text-muted-foreground">No notifications yet.</p>';
+                return;
+            }
+
+            const items = visibleNotifications.map((notification) => {
+                const item = document.createElement('article');
+                item.className = 'px-4 py-3';
+                const title = document.createElement('h3');
+                title.className = 'text-sm font-medium';
+                title.textContent = notification.title || notification.type || 'Incident alert';
+                const message = document.createElement('p');
+                message.className = 'mt-1 text-xs text-muted-foreground';
+                message.textContent = notification.message || notification.body || notification.roadName || 'A new alert was received.';
+                item.append(title, message);
+                if (notification.timestamp) {
+                    const time = document.createElement('time');
+                    time.className = 'mt-2 block text-[10px] text-muted-foreground';
+                    time.textContent = new Date(notification.timestamp).toLocaleString();
+                    item.append(time);
+                }
+                return item;
+            });
+            list.replaceChildren(...items);
+        }
+
+        function renderStats() {
+            const reportCount = allIncidents.length;
+            const active = allIncidents.filter(i => ['approved', 'active'].includes(String(i.status || '').toLowerCase())).length;
+            const container = document.getElementById('stat-cards');
+            if(!container) return;
+
+            container.innerHTML = `
+                <div class="glass rounded-2xl p-5 relative overflow-hidden stat-card">
+                    <div class="flex items-start justify-between">
+                        <div>
+                            <div class="text-[11px] uppercase text-muted-foreground font-medium">Reports in Queue</div>
+                            <div class="mt-3 text-5xl font-bold tracking-tight text-amber-500">${reportCount}</div>
+                        </div>
+                        <div class="size-10 grid place-items-center rounded-xl bg-amber-500/10 text-amber-500"><i data-lucide="shield-check"></i></div>
+                    </div>
+                </div>
+                <div class="glass rounded-2xl p-5 relative overflow-hidden stat-card">
+                    <div class="flex items-start justify-between">
+                        <div>
+                            <div class="text-[11px] uppercase text-muted-foreground font-medium">Active Hazards</div>
+                            <div class="mt-3 text-5xl font-bold tracking-tight text-red-500">${active}</div>
+                        </div>
+                        <div class="size-10 grid place-items-center rounded-xl bg-red-500/10 text-red-500"><i data-lucide="siren"></i></div>
+                    </div>
+                </div>
+                <div class="glass rounded-2xl p-5 relative overflow-hidden stat-card">
+                    <div class="flex items-start justify-between">
+                        <div>
+                            <div class="text-[11px] uppercase text-muted-foreground font-medium">Active Users</div>
+                            <div class="mt-3 text-5xl font-bold tracking-tight text-green-500">${allUsers.length}</div>
+                        </div>
+                        <div class="size-10 grid place-items-center rounded-xl bg-green-500/10 text-green-500"><i data-lucide="users"></i></div>
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+            window.sentinelFirestoreReportCount = reportCount;
+            document.getElementById('queue-badge').textContent = reportCount;
+            document.getElementById('mobile-queue-badge').textContent = reportCount;
+        }
+
+        function renderQueue() {
+            const container = document.getElementById('queue-section');
+            if(!container) return;
+
+            container.replaceChildren();
+            const header = document.createElement('div');
+            header.className = 'p-5 flex items-center justify-between border-b border-border flex-wrap gap-3';
+            const heading = document.createElement('div');
+            heading.innerHTML = '<h2 class="text-base font-semibold tracking-tight">Moderation Queue</h2><p class="text-xs text-muted-foreground mt-0.5">All reports, including deleted reports, are permanently removed 12 hours after submission.</p>';
+            const count = document.createElement('span');
+            count.className = 'text-xs font-semibold px-2 py-1 rounded-md';
+            count.style.cssText = 'background: color-mix(in oklab, var(--primary) 15%, transparent); color: var(--primary)';
+            count.textContent = `${allIncidents.length} reports`;
+            header.append(heading, count);
+
+            const tableWrap = document.createElement('div');
+            tableWrap.className = 'overflow-x-auto';
+            const table = document.createElement('table');
+            table.className = 'w-full text-sm';
+            table.innerHTML = '<thead><tr class="text-[10px] uppercase tracking-wider text-muted-foreground"><th class="text-left px-5 py-3">Incident</th><th class="text-left px-5 py-3">Location</th><th class="text-left px-5 py-3">Reported</th><th class="text-left px-5 py-3">Status</th><th class="text-left px-5 py-3">Severity / Upvotes</th><th class="text-right px-5 py-3">Actions</th></tr></thead>';
+            const body = document.createElement('tbody');
+            const reports = allIncidents.slice().sort((left, right) =>
+                (getReportExpiryTimestamp(right) || 0) - (getReportExpiryTimestamp(left) || 0)
+            );
+
+            if (reports.length === 0) {
+                const emptyRow = document.createElement('tr');
+                const emptyCell = document.createElement('td');
+                emptyCell.colSpan = 6;
+                emptyCell.className = 'px-5 py-12 text-center text-sm text-muted-foreground';
+                emptyCell.textContent = 'No reports yet. New reports from the app will appear here.';
+                emptyRow.appendChild(emptyCell);
+                body.appendChild(emptyRow);
+            }
+
+            reports.forEach((report) => {
+                const row = document.createElement('tr');
+                row.className = 'border-t border-border hover:bg-white/5 transition';
+                row.dataset.id = report.id;
+                const reportedAt = reportTimestampMilliseconds(report.timestamp || report.createdAt || report.created_at || report.time_reported);
+                const isDeleted = String(report.status || '').toLowerCase() === 'deleted';
+                const values = [
+                    report.type || report.kind || 'Incident',
+                    `${report.roadName || report.road || 'Unknown road'} · ${report.city || 'Unknown city'}${report.province ? `, ${report.province}` : ''}`,
+                    reportedAt === null ? 'Time unavailable' : new Date(reportedAt).toLocaleString(),
+                    isDeleted ? 'Deleted' : report.statusBox || report.status || 'Active',
+                    `${report.severity || 'Unrated'} · ${Number(report.upvotes) || 0} upvotes`
+                ];
+                values.forEach((value) => {
+                    const cell = document.createElement('td');
+                    cell.className = 'px-5 py-4 text-sm';
+                    cell.textContent = value;
+                    row.appendChild(cell);
+                });
+                const actionsCell = document.createElement('td');
+                actionsCell.className = 'px-5 py-4 text-right';
+                const deleteButton = document.createElement('button');
+                deleteButton.type = 'button';
+                deleteButton.className = 'rounded-md border border-border px-3 py-1.5 text-xs font-medium text-destructive hover:bg-white/10 disabled:opacity-50';
+                deleteButton.textContent = isDeleted ? 'Deleted' : 'Delete';
+                deleteButton.disabled = isDeleted;
+                deleteButton.addEventListener('click', () => deleteIncident(report, deleteButton));
+                actionsCell.appendChild(deleteButton);
+                row.appendChild(actionsCell);
+                body.appendChild(row);
+            });
+
+            table.appendChild(body);
+            tableWrap.appendChild(table);
+            container.append(header, tableWrap);
+            lucide.createIcons();
+        }
+
+        function isPendingModeration(report) {
+            const status = String(report.status || '').toLowerCase();
+            return !['approved', 'active', 'dismissed', 'rejected', 'verified', 'deleted'].includes(status);
+        }
+
+        async function deleteIncident(report, deleteButton) {
+            const incidentLabel = `${report.type || report.kind || 'Incident'} on ${report.roadName || report.road || 'Unknown road'}`;
+            if (!window.confirm(`Mark this report as deleted? It will be removed from the map now and permanently cleared when it is 12 hours old.\n\n${incidentLabel}`)) return;
+
+            deleteButton.disabled = true;
+            try {
+                const batch = writeBatch(firestore);
+                const incidentRef = doc(firestore, 'incidents', report.id);
+                const notificationRef = doc(firestore, 'notifications', `notif_${report.id}`);
+                batch.update(incidentRef, {
+                    status: 'deleted',
+                    statusBox: 'Deleted',
+                    deletedAt: serverTimestamp(),
+                    deletedBy: document.getElementById('header-username')?.textContent?.trim() || 'Operator'
+                });
+                batch.delete(notificationRef);
+                await batch.commit();
+                allIncidents = allIncidents.map((incident) => incident.id === report.id
+                    ? { ...incident, status: 'deleted', statusBox: 'Deleted', deletedAt: new Date().toISOString() }
+                    : incident);
+                updateUI();
+                console.log(`Report ${report.id} marked deleted; it will expire after 12 hours.`);
+                toast('Report hidden from the live map. It will be removed permanently when it is 12 hours old.');
+            } catch (error) {
+                console.error('Could not delete Firestore report:', error);
+                deleteButton.disabled = false;
+                toast(`Delete failed: ${error.message}`, true);
+            }
+        }
+
+        window.renderFirestoreModerationQueue = renderQueue;
+
+        function renderMapMarkers() {
+            map.invalidateSize();
+            const incidentIds = allIncidents.map((incident) => incident.id).sort().join('|');
+            const incidentSetChanged = incidentIds !== renderedIncidentIds;
+            const incidentCoordinates = [];
+            incidentMarkers.clearLayers();
+
+            allIncidents.forEach(m => {
+                const status = String(m.status || '').toLowerCase();
+                if (!['approved', 'active', 'verified'].includes(status)) return;
+
+                const latitude = Number(m.latitude ?? m.location?.latitude);
+                const longitude = Number(m.longitude ?? m.location?.longitude);
+                if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+                incidentCoordinates.push([latitude, longitude]);
+
+                const type = String(m.type || m.kind || '').toLowerCase();
+                const markerColor = type.includes('accident') ? '#ef4444' :
+                    type.includes('pothole') || type.includes('damage') ? '#3b82f6' : '#f59e0b';
+                const title = `${m.type || m.kind || 'Incident'} on ${m.roadName || m.road || 'Unknown road'}${m.city ? `, ${m.city}` : ''}`;
+                const popup = document.createElement('div');
+                const heading = document.createElement('strong');
+                heading.textContent = title;
+                const details = document.createElement('p');
+                details.textContent = `GPS: ${latitude}, ${longitude} · Upvotes: ${Number(m.upvotes) || 0}`;
+                const upvoteButton = document.createElement('button');
+                upvoteButton.type = 'button';
+                upvoteButton.className = 'mt-2 rounded border border-gray-300 px-2 py-1 text-sm';
+                upvoteButton.textContent = 'Upvote report';
+                upvoteButton.addEventListener('click', async () => {
+                    upvoteButton.disabled = true;
+                    try {
+                        await upvoteIncidentFromWeb(m.id);
+                        upvoteButton.textContent = 'Upvoted';
+                    } catch (error) {
+                        console.error('Could not upvote incident:', error);
+                        upvoteButton.textContent = 'Try again';
+                        upvoteButton.disabled = false;
+                    }
+                });
+                popup.append(heading, details, upvoteButton);
+
+                L.circleMarker([latitude, longitude], {
+                    radius: 8,
+                    color: markerColor,
+                    fillColor: markerColor,
+                    fillOpacity: 0.85,
+                    weight: 2
+                }).bindTooltip(title).bindPopup(popup).addTo(incidentMarkers);
+            });
+
+            if (incidentSetChanged) {
+                renderedIncidentIds = incidentIds;
+                if (incidentCoordinates.length) {
+                    const bounds = L.latLngBounds(incidentCoordinates);
+                    if (bounds.isValid()) map.fitBounds(bounds.pad(0.35), { maxZoom: 12 });
+                }
+            }
+        }
+
+        window.renderMapMarkers = renderMapMarkers;
+
+        function renderProvinceChart() {
+            const container = document.getElementById('province-chart');
+            if(!container) return;
+            const counts = {};
+            allIncidents.forEach(i => counts[i.province] = (counts[i.province] || 0) + 1);
+            
+            const html = Object.entries(counts).map(([name, val]) => `
+                <div class="mb-3">
+                    <div class="flex justify-between text-xs mb-1"><span>${name}</span><span class="font-mono">${val}</span></div>
+                    <div class="h-1.5 rounded-full bg-surface-elevated overflow-hidden">
+                        <div class="h-full bg-primary" style="width: ${(val/allIncidents.length)*100}%"></div>
+                    </div>
+                </div>
+            `).join('');
+            
+            container.innerHTML = `<h3 class="text-sm font-semibold mb-4">Reports by Province</h3>${html || '<p class="text-xs text-muted-foreground">No data</p>'}`;
+        }
+
+        function toast(msg, isError = false) {
+            const t = document.createElement('div');
+            t.className = `toast ${isError ? 'error' : ''} show`;
+            t.textContent = msg;
+            document.body.appendChild(t);
+            setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 500); }, 3000);
+        }
+
+        // 5. SIMPLE BYPASS FOR LOCAL LOGIN
+        document.getElementById('login-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            document.getElementById('login-view').style.display = 'none';
+            document.getElementById('dashboard-view').style.display = 'flex';
+            updateUI();
+        });
+
+        document.getElementById('logout-btn').addEventListener('click', () => {
+            location.reload();
+        });
+
+    </script>
+</body>
+</html>

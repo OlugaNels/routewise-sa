@@ -1,0 +1,9 @@
+{
+  "name": "sentinel-command-center",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "init-db": "node init-db.js",
+    "start": "node server.js"
+  }
+}
