@@ -13,6 +13,12 @@ Real-time road alert Android app for Gauteng, South Africa. Built with Kotlin, F
 | Oluga Neluvhalani | ST10443034 | Project Manager |
 | Phathutshedzo Kevin Makherana | ST10438610 | UX / Tester |
 
+## Live links
+
+- Website and API (Render): https://routewise-sentinel.onrender.com (API example: `/api/incidents/live`)
+- Firebase Hosting (static page only): https://routewisesa-fcde8.web.app
+- GitHub Actions: https://github.com/OlugaNels/routewise-sa/actions
+
 ## Features
 
 - Register and log in with email and password (Firebase Authentication, passwords hashed by Firebase)
