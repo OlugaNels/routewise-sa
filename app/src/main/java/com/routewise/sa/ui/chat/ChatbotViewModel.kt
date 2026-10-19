@@ -40,11 +40,13 @@ class ChatbotViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 val response = RetrofitClient.aiService.askRoadAssistant(AiChatRequestDto(prompt = prompt))
-                val reply = response.body()?.responseText ?: "Traffic is flowing smoothly along standard corridors. Drive with caution."
+                val reply = response.body()?.responseText
+                    ?: "Sorry, the assistant could not answer that right now. Check the Alerts and Map tabs for live road reports."
                 current.add(ChatMessage(sender = "ai", text = reply))
                 _messages.postValue(current)
             } catch (e: Exception) {
-                current.add(ChatMessage(sender = "ai", text = "Note: N1 corridor through Buccleuch interchange is moving at 95 km/h. Engen 1-Stop Midrand is 12 km ahead."))
+                // Never invent traffic information: say honestly that the assistant is unavailable
+                current.add(ChatMessage(sender = "ai", text = "Sorry, the assistant is not available right now. Check the Alerts and Map tabs for live road reports."))
                 _messages.postValue(current)
             } finally {
                 _isSending.postValue(false)

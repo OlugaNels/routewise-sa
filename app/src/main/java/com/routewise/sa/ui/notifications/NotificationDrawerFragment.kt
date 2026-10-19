@@ -138,43 +138,10 @@ class NotificationDrawerFragment : Fragment() {
         }
     }
 
+    /** Shown when there are no notifications yet (or they cannot be loaded): an empty list, never made-up alerts. */
     private fun loadInitialMockNotifications() {
         notificationList.clear()
-        notificationList.addAll(
-            listOf(
-                NotificationItem(
-                    id = "n1",
-                    title = "🕳️ Pothole in Sandton",
-                    message = "M1 South near Grayston Dr — deep hole in left lane (+25 Impact Points awarded).",
-                    latitude = -26.1076,
-                    longitude = 28.0567,
-                    timestamp = System.currentTimeMillis() - 600000,
-                    impactBonus = 25,
-                    isRead = false
-                ),
-                NotificationItem(
-                    id = "n2",
-                    title = "💥 Accident in Midrand",
-                    message = "N1 North near Allandale Rd — 2 cars blocking middle lane.",
-                    latitude = -25.9983,
-                    longitude = 28.1278,
-                    timestamp = System.currentTimeMillis() - 1800000,
-                    impactBonus = 25,
-                    isRead = false
-                ),
-                NotificationItem(
-                    id = "n3",
-                    title = "🚦 Broken Robot in Pretoria",
-                    message = "Corner of Nana Sita & Lilian Ngoyi St — lights out, treat as 4-way stop.",
-                    latitude = -25.7483,
-                    longitude = 28.1901,
-                    timestamp = System.currentTimeMillis() - 3600000,
-                    impactBonus = 25,
-                    isRead = true
-                )
-            )
-        )
         adapter.notifyDataSetChanged()
-        tvUnreadBadge.text = "${notificationList.count { !it.isRead }} Unread"
+        tvUnreadBadge.text = "0 Unread"
     }
 }

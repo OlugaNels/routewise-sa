@@ -17,8 +17,35 @@ class MainActivity : AppCompatActivity() {
     private lateinit var navController: NavController
     private lateinit var appBarConfiguration: AppBarConfiguration
 
+    private val notificationPermissionLauncher =
+        registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Never show the app to someone who is not signed in (covers deep links and a stale session)
+        if (!com.routewise.sa.data.SessionManager(this).isLoggedIn() ||
+            com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null
+        ) {
+            com.routewise.sa.data.SessionManager(this).logout()
+            startActivity(
+                android.content.Intent(this, com.routewise.sa.ui.auth.LoginActivity::class.java).apply {
+                    flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK
+                }
+            )
+            finish()
+            return
+        }
+
+        // Android 13 and newer need the user's permission before alerts can be shown as notifications
+        if (android.os.Build.VERSION.SDK_INT >= 33 &&
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                this, android.Manifest.permission.POST_NOTIFICATIONS
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -50,12 +77,8 @@ class MainActivity : AppCompatActivity() {
         binding.bottomNavigationView.setupWithNavController(navController)
         binding.navigationView.setupWithNavController(navController)
 
-        // Setup Alerts Badge (Red circle with number 8)
-        val badge = binding.bottomNavigationView.getOrCreateBadge(R.id.navigation_alerts)
-        badge.isVisible = true
-        badge.number = 8
-        badge.backgroundColor = getColor(R.color.hazard_accident_rose)
-        badge.badgeTextColor = getColor(R.color.text_primary_white)
+        // The Alerts tab used to show a fixed "8" badge, which was not real data
+        binding.bottomNavigationView.removeBadge(R.id.navigation_alerts)
 
         // Drawer custom item clicks
         binding.navigationView.setNavigationItemSelectedListener { menuItem ->
