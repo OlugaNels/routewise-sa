@@ -10,6 +10,12 @@ Real-time road alert Android app for Gauteng, South Africa. Built with Kotlin, F
 
 **Module:** XISD6329w | **Group 2** | Task 2: Mobile App Development
 
+## Screenshots
+
+| Sign in | Map | Live alerts | Report a hazard |
+|---|---|---|---|
+| <img src="docs/screenshots/S04-sign-in.png" width="190" alt="Sign in with email or Google"> | <img src="docs/screenshots/S07-map.png" width="190" alt="Map with nearby places and hazards"> | <img src="docs/screenshots/S08-alerts.png" width="190" alt="Live road alerts feed"> | <img src="docs/screenshots/S09-report-step1.png" width="190" alt="Choose an incident type"> |
+
 ## Team and contributions
 
 RouteWise SA was built by Group 2 for module XISD6329w. Each member's role and contribution is listed below.
