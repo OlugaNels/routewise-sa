@@ -221,7 +221,7 @@ class LoginActivity : AppCompatActivity() {
             firebaseAuth.sendPasswordResetEmail(email)
                 .addOnSuccessListener {
                     btnSendResetCode.isEnabled = true
-                    toast("If $email is registered, a reset link has been sent. Check your inbox.")
+                    toast("If $email has a password account, a reset link has been sent (check spam too). If you signed up with Google, use Sign in with Google instead.")
                     closeResetPanel()
                 }
                 .addOnFailureListener { e ->
@@ -363,7 +363,7 @@ class LoginActivity : AppCompatActivity() {
     }
 
     private fun authErrorMessage(e: Exception): String = when (e) {
-        is FirebaseAuthUserCollisionException -> "An account with this email already exists. Use Sign In instead."
+        is FirebaseAuthUserCollisionException -> "An account with this email already exists (it may have been created with Google). Use Sign In or Sign in with Google instead."
         is FirebaseAuthWeakPasswordException -> "That password is too weak. Use at least ${InputValidator.MIN_PASSWORD_LENGTH} characters."
         is FirebaseAuthInvalidUserException -> "No account found for this email. Create an account first."
         is FirebaseAuthInvalidCredentialsException -> "Incorrect email or password."
