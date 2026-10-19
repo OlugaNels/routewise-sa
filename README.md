@@ -43,4 +43,5 @@ Every push runs both steps in GitHub Actions: see `.github/workflows/android-bui
 
 - `app/src/main/java/com/routewise/sa/` app source (`ui/`, `data/`, `util/`)
 - `app/src/test/` unit tests (`InputValidatorTest`)
+- `website/` Sentinel Command Center admin website (Node.js server, Firebase)
 - `.github/workflows/` GitHub Actions build and test workflow
