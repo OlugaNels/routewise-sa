@@ -1,5 +1,30 @@
 {
   "firestore": {
     "rules": "firestore.rules"
+  },
+  "hosting": {
+    "site": "routewisesa-fcde8",
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      "firestore.rules",
+      "server.js",
+      "db.js",
+      "init-db.js",
+      "data/**",
+      "node_modules/**",
+      "package.json",
+      "package-lock.json",
+      "*.bat",
+      "README.md",
+      ".vscode/**",
+      "**/.*"
+    ],
+    "rewrites": [
+      {
+        "source": "/",
+        "destination": "/Sentinel — Command Center.html"
+      }
+    ]
   }
 }
