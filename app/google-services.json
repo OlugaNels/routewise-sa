@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "890979373130-9kfchl1qtk1k2g7gasrgn4p5le6deq79.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.routewise.sa",
+            "certificate_hash": "0cdbcd281f1b5578b0195304ee8922b3645bd7cc"
+          }
+        },
+        {
           "client_id": "890979373130-2ot6rm7kl8cp65k14a4aqlbarhn2c7jf.apps.googleusercontent.com",
           "client_type": 3
         }
