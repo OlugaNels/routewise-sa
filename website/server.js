@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const db = require('./db');
+const store = db; // handleApi() receives the loaded data as 'db', so use 'store' for the module functions
 
 const PORT = Number(process.env.PORT || 3000);
 const HTML_PATH = path.join(__dirname, 'Sentinel — Command Center.html');
@@ -14,6 +15,33 @@ const STATIC_FILES = new Map([
   ['/firebase-messaging-sw.js', path.join(__dirname, 'firebase-messaging-sw.js')]
 ]);
 const activeTokens = new Map();
+const TOKEN_LIFETIME_MS = 12 * 60 * 60 * 1000;
+const loginFailures = new Map();
+const MAX_LOGIN_FAILURES = 5;
+const LOGIN_WINDOW_MS = 60 * 1000;
+
+function clientIp(req) {
+  return String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').split(',')[0].trim();
+}
+
+function isLoginBlocked(ip) {
+  const entry = loginFailures.get(ip);
+  if (!entry) return false;
+  if (Date.now() - entry.first > LOGIN_WINDOW_MS) {
+    loginFailures.delete(ip);
+    return false;
+  }
+  return entry.count >= MAX_LOGIN_FAILURES;
+}
+
+function recordLoginFailure(ip) {
+  const entry = loginFailures.get(ip);
+  if (!entry || Date.now() - entry.first > LOGIN_WINDOW_MS) {
+    loginFailures.set(ip, { count: 1, first: Date.now() });
+  } else {
+    entry.count += 1;
+  }
+}
 
 function ensureDb() {
   db.ensureDb();
@@ -30,7 +58,7 @@ function saveDb(dbData) {
 
 function createToken(username) {
   const token = crypto.randomBytes(16).toString('hex');
-  activeTokens.set(token, username);
+  activeTokens.set(token, { username, expires: Date.now() + TOKEN_LIFETIME_MS });
   return token;
 }
 
@@ -39,7 +67,13 @@ function authFromRequest(req) {
   const match = authHeader.match(/^Bearer\s+(.+)$/i);
   if (!match) return null;
   const token = match[1];
-  return activeTokens.has(token) ? { token, username: activeTokens.get(token) } : null;
+  const entry = activeTokens.get(token);
+  if (!entry) return null;
+  if (entry.expires < Date.now()) {
+    activeTokens.delete(token);
+    return null;
+  }
+  return { token, username: entry.username };
 }
 
 function sendJson(res, statusCode, payload) {
@@ -219,13 +253,22 @@ function handleApi(req, res, db) {
   }
 
   if (req.method === 'POST' && pathname === '/api/login') {
+    const ip = clientIp(req);
+    if (isLoginBlocked(ip)) {
+      return sendJson(res, 429, { ok: false, error: 'Too many failed attempts. Try again in a minute.' });
+    }
     parseJsonBody(req).then(payload => {
       const username = (payload.username || '').toString().trim();
-      const password = (payload.password || '').toString().trim();
-      const user = (db.users || []).find(entry => entry.username === username && entry.password === password);
+      const password = (payload.password || '').toString();
+      if (!username || !password) {
+        return sendJson(res, 400, { ok: false, error: 'Enter a username and password' });
+      }
+      const user = store.verifyLogin(username, password);
       if (!user) {
+        recordLoginFailure(ip);
         return sendJson(res, 401, { ok: false, error: 'Invalid credentials' });
       }
+      loginFailures.delete(ip);
       const token = createToken(username);
       return sendJson(res, 200, { ok: true, token, username, role: user.role || 'operator' });
     }).catch(error => sendJson(res, 400, { ok: false, error: error.message }));
@@ -251,7 +294,7 @@ function handleApi(req, res, db) {
         return sendJson(res, 400, { error: 'Missing required fields: kind, road, city' });
       }
       try {
-        const result = db.insertIncidentReport({ kind, road, city, latitude, longitude, trust });
+        const result = store.insertIncidentReport({ kind, road, city, latitude, longitude, trust });
         if (result.changes > 0) {
           return sendJson(res, 201, { success: true, message: 'Report received', reportId: result.lastInsertRowid });
         }
@@ -265,7 +308,7 @@ function handleApi(req, res, db) {
 
   if (req.method === 'GET' && pathname === '/api/incidents/live') {
     try {
-      return sendJson(res, 200, db.getLiveIncidents());
+      return sendJson(res, 200, store.getLiveIncidents());
     } catch (err) {
       return sendJson(res, 500, { error: err.message });
     }
@@ -278,7 +321,7 @@ function handleApi(req, res, db) {
         return sendJson(res, 400, { error: 'Missing required fields: type (bug/help), message' });
       }
       try {
-        const result = db.insertAdminReport({ user_id, type, message });
+        const result = store.insertAdminReport({ user_id, type, message });
         if (result.changes > 0) {
           return sendJson(res, 201, { success: true, message: 'Report received' });
         }
@@ -293,7 +336,7 @@ function handleApi(req, res, db) {
   if (req.method === 'GET' && pathname === '/api/admin/reports') {
     const auth = authFromRequest(req);
     if (!auth) return sendJson(res, 401, { ok: false, error: 'Unauthorized' });
-    return sendJson(res, 200, db.getAdminReports());
+    return sendJson(res, 200, store.getAdminReports());
   }
 
   if (req.method === 'PATCH' && pathname.startsWith('/api/admin/reports/')) {
@@ -304,7 +347,7 @@ function handleApi(req, res, db) {
       if (!status || !['open', 'in_progress', 'resolved'].includes(status)) {
         return sendJson(res, 400, { error: 'Invalid status' });
       }
-      const result = db.updateAdminReportStatus(pathname.split('/').pop(), status);
+      const result = store.updateAdminReportStatus(pathname.split('/').pop(), status);
       if (result.changes > 0) {
         return sendJson(res, 200, { success: true });
       }
@@ -432,6 +475,8 @@ const server = http.createServer((req, res) => {
   }
   return handleStatic(req, res);
 });
+
+db.ensureAdmin();
 
 setInterval(() => {
   try {

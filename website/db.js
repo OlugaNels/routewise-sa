@@ -1,5 +1,7 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
+const { buildSeed } = require('./seed');
 
 const dataDir = path.join(__dirname, 'data');
 const DB_PATH = path.join(dataDir, 'db.json');
@@ -24,20 +26,53 @@ function removeExpiredReports(db) {
 
 function ensureSeedData() {
   if (fs.existsSync(DB_PATH)) return;
-
-  const seed = {
-    users: [
-      { username: 'admin', password: 'sentinel', role: 'admin' }
-    ],
-    reports: [],
-    markers: [],
-    province: [],
-    trend: [],
-    admin_reports: []
-  };
-
   fs.mkdirSync(dataDir, { recursive: true });
-  fs.writeFileSync(DB_PATH, JSON.stringify(seed, null, 2));
+  fs.writeFileSync(DB_PATH, JSON.stringify(buildSeed(), null, 2));
+}
+
+// ---- Admin account: password comes from the ADMIN_PASSWORD setting and is stored hashed ----
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+}
+
+function checkPassword(password, stored) {
+  if (!stored || !stored.includes(':')) return false;
+  const [salt, hash] = stored.split(':');
+  const expected = Buffer.from(hash, 'hex');
+  const actual = crypto.scryptSync(password, salt, expected.length);
+  return crypto.timingSafeEqual(expected, actual);
+}
+
+function ensureAdmin() {
+  ensureSeedData();
+  const db = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+  if (!Array.isArray(db.users)) db.users = [];
+  const fromEnv = process.env.ADMIN_PASSWORD;
+  let admin = db.users.find(user => user.username === 'admin');
+
+  if (!fromEnv && admin && admin.passwordHash) return;
+
+  let password = fromEnv;
+  if (!password) {
+    // No setting and no existing admin: make a random one-off password and print it once
+    password = crypto.randomBytes(9).toString('base64url');
+    console.log(`ADMIN_PASSWORD is not set. Temporary admin login: admin / ${password}`);
+  }
+  if (!admin) {
+    admin = { username: 'admin', role: 'admin' };
+    db.users.push(admin);
+  }
+  delete admin.password;
+  admin.passwordHash = hashPassword(password);
+  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
+}
+
+function verifyLogin(username, password) {
+  const user = (loadDb().users || []).find(entry => entry.username === username);
+  if (!user || !checkPassword(password, user.passwordHash)) return null;
+  return user;
 }
 
 function loadDb() {
@@ -49,7 +84,13 @@ function loadDb() {
   if (!Array.isArray(db.province)) db.province = [];
   if (!Array.isArray(db.trend)) db.trend = [];
   if (!Array.isArray(db.admin_reports)) db.admin_reports = [];
-  if (removeExpiredReports(db)) saveDb(db);
+  let changed = removeExpiredReports(db);
+  // Demo data: when every report has expired, bring the sample reports back so the dashboard is never empty
+  if (db.reports.length === 0 && process.env.DEMO_RESEED !== 'false') {
+    db.reports = buildSeed().reports;
+    changed = true;
+  }
+  if (changed) saveDb(db);
   return db;
 }
 
@@ -142,6 +183,8 @@ function updateAdminReportStatus(id, status) {
 }
 
 module.exports = {
+  ensureAdmin,
+  verifyLogin,
   ensureDb,
   loadDb,
   saveDb,

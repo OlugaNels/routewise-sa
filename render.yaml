@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: routewise-sentinel
+    runtime: node
+    plan: free
+    rootDir: website
+    buildCommand: echo "no build step"
+    startCommand: node server.js
+    healthCheckPath: /api/incidents/live
+    envVars:
+      - key: ADMIN_PASSWORD
+        sync: false

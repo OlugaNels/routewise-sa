@@ -19,3 +19,16 @@ Sentinel is a web-based operations dashboard for monitoring reported road hazard
 - Firebase Cloud Firestore and Firebase Cloud Messaging integration
 
 - 
+
+## Running and deploying
+
+Run locally (Node 18 or newer):
+
+```
+set ADMIN_PASSWORD=choose-a-password   (PowerShell: $env:ADMIN_PASSWORD="choose-a-password")
+node server.js
+```
+
+Open http://localhost:3000 and sign in as `admin`. If `ADMIN_PASSWORD` is not set, a temporary password is printed in the server console.
+
+Free hosting on Render: see `render.yaml` in the repository root. Create a Web Service from this repository, accept the free plan, and set `ADMIN_PASSWORD` under Environment. The free plan sleeps after 15 minutes without requests, and its disk is not kept between restarts, so sample data is re-created on start.

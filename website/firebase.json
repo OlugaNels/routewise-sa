@@ -11,6 +11,7 @@
       "server.js",
       "db.js",
       "init-db.js",
+      "seed.js",
       "data/**",
       "node_modules/**",
       "package.json",
