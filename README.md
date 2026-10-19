@@ -20,6 +20,9 @@ Neo Madima's original commits for the website are in this repository's history (
 ## Live links
 
 - Website and API (Render): https://routewise-sentinel.onrender.com (API example: `/api/incidents/live`)
+- Demonstration video (YouTube): https://youtu.be/6SSjHJxOnwA
+- Demonstration video file (MP4, 17 MB): https://github.com/OlugaNels/routewise-sa/releases/download/v1.0-test/RouteWiseSA-Task2-Demonstration.mp4
+- Android app download (APK): https://github.com/OlugaNels/routewise-sa/releases/tag/v1.0-test
 - Firebase Hosting (static page only): https://routewisesa-fcde8.web.app
 - GitHub Actions: https://github.com/OlugaNels/routewise-sa/actions
 
