@@ -1039,6 +1039,8 @@
                 loginView.style.display = 'none';
                 dashboardView.style.display = 'flex';
                 dashboardView.classList.add('active');
+                // the map was created while hidden: resize it and centre it on South Africa
+                setTimeout(function () { if (window.sentinelMap) { window.sentinelMap.invalidateSize(); window.sentinelMap.setView([-29, 24], 5); } }, 250);
                 // re-init lucide after showing
                 lucide.createIcons();
                 // load dashboard data
@@ -1703,6 +1705,7 @@
 
         const firestore = db;
         const map = L.map('map-container').setView([-29, 24], 5);
+        window.sentinelMap = map; // lets showDashboard() resize the map once it is visible
         const incidentMarkers = L.featureGroup().addTo(map);
         let renderedIncidentIds = '';
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
