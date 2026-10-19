@@ -1,6 +1,12 @@
 # RouteWise SA
 
+[![Android build and test](https://github.com/OlugaNels/routewise-sa/actions/workflows/android-build.yml/badge.svg)](https://github.com/OlugaNels/routewise-sa/actions/workflows/android-build.yml)
+
 Real-time road alert Android app for Gauteng, South Africa. Built with Kotlin, Firebase Authentication and Firestore, Room, and OpenStreetMap.
+
+**Purpose:** drivers report road hazards and see live alerts from other users on a map and in an alert feed. A companion website (Sentinel Command Center) lets an administrator monitor incidents, and both use the same Firebase project.
+
+**Watch the demonstration video:** https://youtu.be/6SSjHJxOnwA
 
 **Module:** XISD6329w | **Group 2** | Task 2: Mobile App Development
 
@@ -25,6 +31,7 @@ Neo Madima's original commits for the website are in this repository's history (
 - Android app download (APK): https://github.com/OlugaNels/routewise-sa/releases/tag/v1.0-test
 - Firebase Hosting (static page only): https://routewisesa-fcde8.web.app
 - GitHub Actions: https://github.com/OlugaNels/routewise-sa/actions
+- User guide (PDF): [docs/RouteWise_SA_User_Guide.pdf](docs/RouteWise_SA_User_Guide.pdf)
 
 ## Features
 
@@ -58,3 +65,4 @@ Every push runs both steps in GitHub Actions: see `.github/workflows/android-bui
 - `app/src/test/` unit tests (`InputValidatorTest`)
 - `website/` Sentinel Command Center admin website (Node.js server, Firebase)
 - `.github/workflows/` GitHub Actions build and test workflow
+- `docs/` user guide (PDF)
