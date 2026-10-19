@@ -8,11 +8,24 @@ import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.navigation.fragment.findNavController
+import androidx.lifecycle.lifecycleScope
 import com.routewise.sa.R
+import com.routewise.sa.data.SessionManager
+import com.routewise.sa.util.InputValidator
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 import com.routewise.sa.databinding.FragmentHelpSupportBinding
 import com.routewise.sa.databinding.ItemFaqBinding
 
 class HelpSupportFragment : Fragment() {
+
+    companion object {
+        private const val TICKET_URL = "https://routewise-sentinel.onrender.com/api/admin/app-reports"
+    }
 
     private var _binding: FragmentHelpSupportBinding? = null
     private val helpBinding get() = _binding!!
@@ -63,12 +76,54 @@ class HelpSupportFragment : Fragment() {
         helpBinding.spinnerFaqCategory.adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, categories)
 
         helpBinding.btnSubmitTicket.setOnClickListener {
-            if (helpBinding.etSupportDesc.text.isBlank()) {
+            val message = helpBinding.etSupportDesc.text.toString().trim()
+            if (message.isEmpty()) {
                 helpBinding.etSupportDesc.error = "Description required"
                 return@setOnClickListener
             }
-            Toast.makeText(requireContext(), "Support Ticket Submitted!", Toast.LENGTH_SHORT).show()
-            helpBinding.etSupportDesc.text.clear()
+            if (!InputValidator.isDescriptionWithinLimit(message)) {
+                helpBinding.etSupportDesc.error = "Keep it to ${InputValidator.MAX_DESCRIPTION_LENGTH} characters or fewer"
+                return@setOnClickListener
+            }
+            val category = helpBinding.spinnerFaqCategory.selectedItem?.toString() ?: "App Bug"
+            val type = if (category == "App Bug") "bug" else "help"
+            val userId = SessionManager(requireContext()).getUserId().ifEmpty { "anonymous" }
+            sendTicket(userId, type, "[$category] $message")
+        }
+    }
+
+    /** Sends the ticket to the RouteWise API (the Sentinel website's /api/admin/app-reports route). */
+    private fun sendTicket(userId: String, type: String, message: String) {
+        helpBinding.btnSubmitTicket.isEnabled = false
+        Toast.makeText(requireContext(), "Sending your ticket...", Toast.LENGTH_SHORT).show()
+        val appContext = requireContext().applicationContext
+        viewLifecycleOwner.lifecycleScope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                try {
+                    val conn = URL(TICKET_URL).openConnection() as HttpURLConnection
+                    conn.requestMethod = "POST"
+                    conn.connectTimeout = 30_000
+                    conn.readTimeout = 60_000 // the free server can take about a minute to wake up
+                    conn.doOutput = true
+                    conn.setRequestProperty("Content-Type", "application/json")
+                    val body = JSONObject().put("user_id", userId).put("type", type).put("message", message).toString()
+                    conn.outputStream.use { it.write(body.toByteArray()) }
+                    val code = conn.responseCode
+                    conn.disconnect()
+                    code in 200..299
+                } catch (_: Exception) {
+                    false
+                }
+            }
+            Toast.makeText(
+                appContext,
+                if (ok) "Support ticket sent. Thank you!" else "Could not send the ticket. Check your connection and try again.",
+                Toast.LENGTH_LONG
+            ).show()
+            _binding?.let {
+                it.btnSubmitTicket.isEnabled = true
+                if (ok) it.etSupportDesc.text.clear()
+            }
         }
     }
 

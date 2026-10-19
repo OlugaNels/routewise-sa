@@ -29,6 +29,19 @@ class IncidentRepository(
         }
     }
 
+    /** Reads a time field stored either as a number (milliseconds) or as a Firestore timestamp. */
+    private fun readMillis(doc: com.google.firebase.firestore.DocumentSnapshot, field: String): Long =
+        try {
+            when (val value = doc.get(field)) {
+                is Number -> value.toLong()
+                is com.google.firebase.Timestamp -> value.toDate().time
+                is java.util.Date -> value.time
+                else -> System.currentTimeMillis()
+            }
+        } catch (e: Exception) {
+            System.currentTimeMillis()
+        }
+
     private fun startRealtimeFirestoreSync() {
         try {
             val firestore = FirebaseFirestore.getInstance()
@@ -40,25 +53,25 @@ class IncidentRepository(
 
                     // Filter out reports older than 12 hours
                     val validDocs = snapshot.documents.filter { doc ->
-                        val ts = doc.getLong("timestamp") ?: System.currentTimeMillis()
-                        ts >= twelveHoursAgo
+                        readMillis(doc, "timestamp") >= twelveHoursAgo
                     }
 
                     val activeIds = validDocs.map { it.id }
                     val entities = validDocs.mapNotNull { doc ->
+                      try {
                         val id = doc.getString("id") ?: doc.id
                         val type = doc.getString("type") ?: "Hazard"
                         val roadName = doc.getString("roadName") ?: ""
                         val city = doc.getString("city") ?: ""
                         val prov = doc.getString("province") ?: ""
-                        val latitude = doc.getDouble("latitude") ?: 0.0
-                        val longitude = doc.getDouble("longitude") ?: 0.0
-                        val timestamp = doc.getLong("timestamp") ?: System.currentTimeMillis()
+                        val latitude = (doc.get("latitude") as? Number)?.toDouble() ?: 0.0
+                        val longitude = (doc.get("longitude") as? Number)?.toDouble() ?: 0.0
+                        val timestamp = readMillis(doc, "timestamp")
                         val reportedBy = doc.getString("reportedBy") ?: "Community Driver"
                         val description = doc.getString("description") ?: ""
                         val severity = doc.getString("severity") ?: "Moderate"
                         val statusBox = doc.getString("statusBox") ?: "Active Alert"
-                        val upvotes = doc.getLong("upvotes")?.toInt() ?: 1
+                        val upvotes = (doc.get("upvotes") as? Number)?.toInt() ?: 1
 
                         IncidentEntity(
                             id = id,
@@ -75,6 +88,11 @@ class IncidentRepository(
                             statusBox = statusBox,
                             upvotes = upvotes
                         )
+                      } catch (e: Exception) {
+                        // One badly formed document must never crash the app
+                        Log.w("IncidentRepo", "Skipping incident ${doc.id}: ${e.message}")
+                        null
+                      }
                     }
 
                     CoroutineScope(Dispatchers.IO).launch {

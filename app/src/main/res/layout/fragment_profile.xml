@@ -52,7 +52,7 @@
                         android:id="@+id/tvProfileName"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Sipho Mokoena"
+                        android:text=""
                         android:textColor="#ffffff"
                         android:textSize="20sp"
                         android:textStyle="bold" />
@@ -61,11 +61,11 @@
                         android:id="@+id/tvProfileEmail"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="sipho.m@example.co.za"
+                        android:text=""
                         android:textColor="#94a3b8"
                         android:textSize="12sp" />
 
-                    <LinearLayout
+                    <LinearLayout android:id="@+id/layoutRankRow"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:orientation="horizontal"
@@ -96,7 +96,7 @@
             </LinearLayout>
 
             <!-- Metrics Grid -->
-            <LinearLayout
+            <LinearLayout android:id="@+id/layoutMetrics"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
@@ -214,7 +214,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="48dp"
                 android:background="@drawable/bg_rounded_slate"
-                android:text="Sipho Mokoena"
+                android:text=""
                 android:textColor="#ffffff"
                 android:textSize="14sp"
                 android:paddingHorizontal="14dp"
@@ -235,7 +235,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="48dp"
                 android:background="@drawable/bg_rounded_slate"
-                android:text="+27 82 456 7890"
+                android:text="" android:hint="+27 82 456 7890" android:textColorHint="#64748b"
                 android:textColor="#ffffff"
                 android:textSize="14sp"
                 android:paddingHorizontal="14dp"
@@ -275,7 +275,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="48dp"
                 android:background="@drawable/bg_rounded_slate"
-                android:text="Toyota Hilux 2.8 GD-6"
+                android:text="" android:hint="e.g. Toyota Corolla" android:textColorHint="#64748b"
                 android:textColor="#ffffff"
                 android:textSize="14sp"
                 android:paddingHorizontal="14dp"
@@ -295,7 +295,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="48dp"
                 android:background="@drawable/bg_rounded_slate"
-                android:text="CA 892-411"
+                android:text="" android:hint="e.g. CA 123-456" android:textColorHint="#64748b"
                 android:textColor="#ffffff"
                 android:textSize="14sp"
                 android:paddingHorizontal="14dp"

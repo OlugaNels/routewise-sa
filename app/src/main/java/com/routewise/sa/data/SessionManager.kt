@@ -15,6 +15,8 @@ class SessionManager(context: Context) {
         private const val KEY_USER_PHONE = "user_phone"
         private const val KEY_USER_PROVINCE = "user_province"
         private const val KEY_USER_CITY = "user_city"
+        private const val KEY_VEHICLE = "user_vehicle"
+        private const val KEY_PLATE = "user_plate"
     }
 
     // --- SAVE LOGIN SESSION ---
@@ -37,6 +39,20 @@ class SessionManager(context: Context) {
             apply()
         }
     }
+
+    // --- SAVE PROFILE EDITS (name, phone, vehicle) ---
+    fun saveProfile(name: String, phone: String, vehicle: String, plate: String) {
+        prefs.edit().apply {
+            putString(KEY_USER_NAME, name)
+            putString(KEY_USER_PHONE, phone)
+            putString(KEY_VEHICLE, vehicle)
+            putString(KEY_PLATE, plate)
+            apply()
+        }
+    }
+
+    fun getVehicle(): String = prefs.getString(KEY_VEHICLE, "") ?: ""
+    fun getPlate(): String = prefs.getString(KEY_PLATE, "") ?: ""
 
     fun isLoggedIn(): Boolean = prefs.getBoolean(KEY_IS_LOGGED_IN, false)
     fun getUserId(): String = prefs.getString(KEY_USER_ID, "") ?: ""

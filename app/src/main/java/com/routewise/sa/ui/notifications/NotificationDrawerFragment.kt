@@ -96,14 +96,19 @@ class NotificationDrawerFragment : Fragment() {
 
                     notificationList.clear()
                     val items = snapshot.documents.mapNotNull { doc ->
+                      try {
                         val id = doc.getString("id") ?: doc.id
                         val title = doc.getString("title") ?: "⚠️ Traffic Alert"
                         val message = doc.getString("message") ?: "Drive cautiously along corridor"
-                        val lat = doc.getDouble("latitude") ?: -25.9983
-                        val lng = doc.getDouble("longitude") ?: 28.1278
-                        val ts = doc.getLong("timestamp") ?: System.currentTimeMillis()
+                        val lat = (doc.get("latitude") as? Number)?.toDouble() ?: -25.9983
+                        val lng = (doc.get("longitude") as? Number)?.toDouble() ?: 28.1278
+                        val ts = when (val raw = doc.get("timestamp")) {
+                            is Number -> raw.toLong()
+                            is com.google.firebase.Timestamp -> raw.toDate().time
+                            else -> System.currentTimeMillis()
+                        }
                         val isRead = doc.getBoolean("isRead") ?: false
-                        val bonus = doc.getLong("impactBonus")?.toInt() ?: 25
+                        val bonus = (doc.get("impactBonus") as? Number)?.toInt() ?: 25
 
                         NotificationItem(
                             id = id,
@@ -115,6 +120,9 @@ class NotificationDrawerFragment : Fragment() {
                             impactBonus = bonus,
                             isRead = isRead
                         )
+                      } catch (e: Exception) {
+                        null // skip a badly formed document instead of crashing
+                      }
                     }
 
                     if (items.isNotEmpty()) {
