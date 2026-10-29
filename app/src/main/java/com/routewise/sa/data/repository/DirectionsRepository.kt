@@ -1,5 +1,6 @@
 package com.routewise.sa.data.repository
 
+import com.routewise.sa.util.NavigationText
 import com.routewise.sa.util.RoadCurveService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -13,7 +14,10 @@ data class DirectionStep(
     val roadName: String,
     val distanceMeters: Int,
     val durationSec: Int,
-    val maneuver: String
+    val maneuver: String,
+    /** Where the manoeuvre of this step happens. */
+    val startLat: Double,
+    val startLng: Double
 )
 
 data class DirectionRoute(
@@ -68,13 +72,28 @@ class DirectionsRepository(private val client: OkHttpClient = OkHttpClient()) {
                                 for (i in 0 until rawSteps.length()) {
                                     val s = rawSteps.getJSONObject(i)
                                     val maneuverObj = s.optJSONObject("maneuver")
+                                    val type = maneuverObj?.optString("type").orEmpty()
+                                    val modifier = maneuverObj?.optString("modifier")?.takeIf { it.isNotEmpty() }
+                                    // OSRM sends no ready-made sentence, so the text is built from the type, direction and road
+                                    val name = s.optString("name").ifEmpty { s.optString("ref") }
+                                    val location = maneuverObj?.optJSONArray("location")
+                                    val startLng = location?.optDouble(0) ?: points.first().longitude
+                                    val startLat = location?.optDouble(1) ?: points.first().latitude
                                     steps.add(
                                         DirectionStep(
-                                            instruction = maneuverObj?.optString("instruction") ?: "Continue",
-                                            roadName = s.optString("name", "Main Road"),
+                                            instruction = NavigationText.instruction(
+                                                type = type,
+                                                modifier = modifier,
+                                                road = name,
+                                                exit = maneuverObj?.optInt("exit", 0)?.takeIf { it > 0 },
+                                                bearingAfter = if (maneuverObj?.has("bearing_after") == true) maneuverObj.optInt("bearing_after") else null
+                                            ),
+                                            roadName = name.ifEmpty { "Unnamed road" },
                                             distanceMeters = s.optDouble("distance", 0.0).toInt(),
                                             durationSec = s.optDouble("duration", 0.0).toInt(),
-                                            maneuver = maneuverObj?.optString("type") ?: "straight"
+                                            maneuver = type.ifEmpty { "continue" },
+                                            startLat = startLat,
+                                            startLng = startLng
                                         )
                                     )
                                 }
