@@ -75,10 +75,10 @@ class RouteRepository(
 
                 Result.success(calculated)
             } else {
-                Result.success(generateFallbackRoute(origin, destination, waypoints))
+                Result.failure(Exception("Could not find a road route to $destination"))
             }
         } catch (_: Exception) {
-            Result.success(generateFallbackRoute(origin, destination, waypoints))
+            Result.failure(Exception("Could not find a road route to $destination"))
         }
     }
 

@@ -9,12 +9,15 @@ import android.content.pm.PackageManager
 import android.graphics.Color
 import android.location.LocationManager
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.speech.RecognizerIntent
 import android.speech.tts.TextToSpeech
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.KeyEvent
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
@@ -29,10 +32,12 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import com.routewise.sa.R
 import com.routewise.sa.RouteWiseApplication
+import com.routewise.sa.data.SettingsManager
 import com.routewise.sa.data.model.IncidentEntity
 import com.routewise.sa.data.repository.CalculatedRoute
 import com.routewise.sa.databinding.FragmentMapBinding
 import com.routewise.sa.ui.ViewModelFactory
+import com.routewise.sa.util.NavigationText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -81,6 +86,23 @@ class MapFragment : Fragment() {
     private var isSimulatingDrive = false
     private var simulationAnimator: ValueAnimator? = null
 
+    private var appliedMapStyle: String? = null
+    private var satelliteOn = false
+    private var followNavigation = true
+    private var lastSpokenStep = -1
+    private var lastPreview: TripPreview? = null
+    private val navHandler = Handler(Looper.getMainLooper())
+    private val navTicker = object : Runnable {
+        override fun run() {
+            if (_binding == null) return
+            if (::locationOverlay.isInitialized) {
+                locationOverlay.myLocation?.let { viewModel.onLocation(GeoPoint(it.latitude, it.longitude)) }
+            }
+            navHandler.postDelayed(this, 1000)
+        }
+    }
+    private val settings by lazy { SettingsManager(requireContext()) }
+
     private val viewModel: MapViewModel by activityViewModels {
         val app = requireActivity().application as RouteWiseApplication
         ViewModelFactory(app.incidentRepository, app.userRepository, app.routeRepository)
@@ -126,26 +148,15 @@ class MapFragment : Fragment() {
         initTextToSpeech()
 
         binding.mapView.setMultiTouchControls(true)
-        
-        // Set MapTiler tile source using MapTiler API key
-        val apiKey = getString(R.string.maptiler_api_key)
-        val mapTilerTileSource = object : OnlineTileSourceBase(
-            "MapTiler",
-            0,
-            19,
-            256,
-            ".png",
-            arrayOf("https://api.maptiler.com/maps/openstreetmap/"),
-            "MapTiler"
-        ) {
-            override fun getTileURLString(pMapTile: Long): String {
-                val zoom = MapTileIndex.getZoom(pMapTile)
-                val x = MapTileIndex.getX(pMapTile)
-                val y = MapTileIndex.getY(pMapTile)
-                return "https://api.maptiler.com/maps/openstreetmap/$zoom/$x/$y.png?key=$apiKey"
-            }
+        // draw the tiles larger on high-resolution screens so street names are readable
+        binding.mapView.isTilesScaledToDpi = true
+        applyMapStyle()
+
+        // once the driver moves the map by hand, stop pulling it back to their position until they tap recenter
+        binding.mapView.setOnTouchListener { _, event ->
+            if (event.action == MotionEvent.ACTION_DOWN) followNavigation = false
+            false
         }
-        binding.mapView.setTileSource(mapTilerTileSource)
 
         val mapController = binding.mapView.controller
         mapController.setZoom(15.0)
@@ -277,6 +288,40 @@ class MapFragment : Fragment() {
             }
         }
 
+        viewModel.progress.observe(viewLifecycleOwner) { progress ->
+            val route = viewModel.activeRoute.value ?: return@observe
+            if (progress == null) return@observe
+            updateTripStatus(route, progress)
+            updateNavigationStep(route, viewModel.currentStepIndex.value ?: 0)
+            if (followNavigation) {
+                locationOverlay.myLocation?.let { binding.mapView.controller.animateTo(GeoPoint(it.latitude, it.longitude)) }
+            }
+            if (progress.arrived) {
+                speakText("You have arrived at ${route.destinationName}")
+                Toast.makeText(requireContext(), "You have arrived at ${route.destinationName}", Toast.LENGTH_LONG).show()
+                viewModel.clearRoute()
+            }
+        }
+
+        viewModel.routeError.observe(viewLifecycleOwner) { message ->
+            if (message != null) {
+                Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show()
+                viewModel.clearRouteError()
+            }
+        }
+
+        viewModel.tripPreview.observe(viewLifecycleOwner) { preview ->
+            if (preview != null && preview !== lastPreview && binding.tvPlaceName.text.toString() == preview.destinationName) {
+                lastPreview = preview;
+                val distance = NavigationText.distance(preview.distanceMeters, settings.useKm)
+                val time = NavigationText.duration(preview.durationSeconds)
+                binding.tvPlaceAddress.text = preview.address
+                binding.tvTripMetrics.text = "⏱️ $time drive • $distance away"
+                binding.tvCorridorAdvice.text = if (preview.mainRoad.isNotEmpty()) "Main road: ${preview.mainRoad}" else ""
+                speakText("Found ${preview.destinationName}. $distance, about $time.")
+            }
+        }
+
         binding.layoutTripStatusBar.btnNextStep.setOnClickListener {
             viewModel.nextStep()
         }
@@ -304,14 +349,53 @@ class MapFragment : Fragment() {
         }
 
         binding.fabRecenter.setOnClickListener {
+            followNavigation = true
             val userLocation = getCurrentUserLocation()
             mapController.animateTo(userLocation)
             mapController.setZoom(16.0)
         }
 
+        // this button switches between the street map and the satellite view
         binding.fabTraffic.setOnClickListener {
-            Toast.makeText(requireContext(), "Traffic layer toggled", Toast.LENGTH_SHORT).show()
+            satelliteOn = !satelliteOn
+            applyMapStyle()
+            Toast.makeText(requireContext(), if (satelliteOn) "Satellite view" else "Street map", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    /** Picks the street, night or satellite map. The night map is used after dark when Night Map Theme is on. */
+    private fun applyMapStyle() {
+        if (_binding == null) return
+        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        val isNight = hour >= 18 || hour < 6
+        val style = when {
+            satelliteOn -> "hybrid"
+            settings.getToggle(SettingsManager.KEY_NIGHT_THEME) && isNight -> "streets-v2-dark"
+            else -> "streets-v2"
+        }
+        if (style == appliedMapStyle) return
+        appliedMapStyle = style
+
+        val apiKey = getString(R.string.maptiler_api_key)
+        val source = object : OnlineTileSourceBase(
+            "MapTiler-$style",
+            0,
+            20,
+            256,
+            ".png",
+            arrayOf("https://api.maptiler.com/maps/$style/"),
+            "© MapTiler © OpenStreetMap contributors"
+        ) {
+            override fun getTileURLString(pMapTile: Long): String {
+                val zoom = MapTileIndex.getZoom(pMapTile)
+                val x = MapTileIndex.getX(pMapTile)
+                val y = MapTileIndex.getY(pMapTile)
+                // @2x tiles hold twice as many pixels, so the map stays sharp on phone screens
+                return "https://api.maptiler.com/maps/$style/$zoom/$x/$y@2x.png?key=$apiKey"
+            }
+        }
+        binding.mapView.setTileSource(source)
+        binding.mapView.invalidate()
     }
 
     private fun setupCockpitControls() {
@@ -629,9 +713,11 @@ class MapFragment : Fragment() {
 
         binding.tvPlaceCategoryBadge.text = badge
         binding.tvPlaceName.text = placeName
-        binding.tvPlaceAddress.text = "Verified location • Gauteng, South Africa"
-        binding.tvTripMetrics.text = "⏱️ ~18 min drive • 15.4 km away"
-        binding.tvCorridorAdvice.text = "Corridor: N1 Highway"
+        // the real address, distance and drive time arrive from the routing service in a moment
+        binding.tvPlaceAddress.text = "Finding this place..."
+        binding.tvTripMetrics.text = "Working out the distance and drive time..."
+        binding.tvCorridorAdvice.text = ""
+        viewModel.previewDestination(userLocation, placeName)
 
         binding.cardAlertDetailModal.visibility = View.GONE
         binding.cardPlaceAssistance.visibility = View.VISIBLE
@@ -639,7 +725,6 @@ class MapFragment : Fragment() {
         val imm = requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
         imm.hideSoftInputFromWindow(binding.etMapSearch.windowToken, 0)
 
-        speakText("Found $placeName. Distance: 15 kilometers. Ready for navigation.")
     }
 
     private fun setupSearchAssistance() {
@@ -914,9 +999,11 @@ class MapFragment : Fragment() {
 
         binding.mapView.overlays.add(routePolyline)
 
-        // Zoom camera to show the complete route from User Location to Destination
-        val boundingBox = BoundingBox.fromGeoPoints(geoPoints)
-        binding.mapView.zoomToBoundingBox(boundingBox, true, 120)
+        // Zoom camera to show the complete route, except when a new route replaces one the driver left
+        if (!viewModel.lastRouteWasReroute) {
+            val boundingBox = BoundingBox.fromGeoPoints(geoPoints)
+            binding.mapView.zoomToBoundingBox(boundingBox, true, 120)
+        }
         binding.mapView.invalidate()
         binding.mapView.postInvalidate()
 
@@ -927,36 +1014,59 @@ class MapFragment : Fragment() {
         binding.layoutNavigationHud.root.visibility = View.VISIBLE
         binding.layoutTripStatusBar.root.visibility = View.VISIBLE
 
-        val totalMin = route.totalDurationSeconds / 60
-        val totalKm = route.totalDistanceMeters / 1000.0
-        binding.layoutTripStatusBar.tvRemainingTime.text = "$totalMin min"
-        binding.layoutTripStatusBar.tvDistanceAndEta.text = String.format(Locale.getDefault(), "%.1f km • ETA 17:35", totalKm)
+        binding.layoutTripStatusBar.tvRemainingTime.text = NavigationText.duration(route.totalDurationSeconds.toInt())
+        binding.layoutTripStatusBar.tvDistanceAndEta.text = "${NavigationText.distance(route.totalDistanceMeters.toInt(), settings.useKm)} • ETA ${NavigationText.arrivalClock(System.currentTimeMillis(), route.totalDurationSeconds.toInt())}"
 
+        lastSpokenStep = -1
+        followNavigation = true
         updateNavigationStep(route, viewModel.currentStepIndex.value ?: 0)
 
-        Toast.makeText(requireContext(), "🧭 Real-road navigation started to ${route.destinationName}", Toast.LENGTH_LONG).show()
+        val message = if (viewModel.lastRouteWasReroute) "You left the route. A new route was found." else "Navigation started to ${route.destinationName}"
+        Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show()
+    }
+
+    private fun updateTripStatus(route: CalculatedRoute, progress: TripProgress) {
+        binding.layoutTripStatusBar.tvRemainingTime.text = NavigationText.duration(progress.remainingSeconds)
+        binding.layoutTripStatusBar.tvDistanceAndEta.text =
+            "${NavigationText.distance(progress.remainingMeters, settings.useKm)} • ETA ${NavigationText.arrivalClock(System.currentTimeMillis(), progress.remainingSeconds)}"
+        binding.layoutTripStatusBar.tripProgressBar.progress = (progress.fractionDone * 100).toInt()
     }
 
     private fun updateNavigationStep(route: CalculatedRoute, index: Int) {
-        val step = route.steps.getOrNull(index) ?: return
+        val steps = route.steps
+        val step = steps.getOrNull(index) ?: return
+        val progress = viewModel.progress.value
+        val useKm = settings.useKm
 
-        binding.layoutNavigationHud.tvRoadInstruction.text = step.instruction
-        binding.layoutNavigationHud.tvDistanceToManeuver.text = "${step.distanceMeters} m"
+        // show the next manoeuvre the driver has to make, and how far away it is
+        val upcoming = steps.getOrNull(index + 1)
+        val metersAway = progress?.metersToNextManeuver ?: step.distanceMeters.toInt()
+        val instruction = upcoming?.instruction ?: "Arrive at ${route.destinationName}"
+        binding.layoutNavigationHud.tvRoadInstruction.text = instruction
+        binding.layoutNavigationHud.tvDistanceToManeuver.text = NavigationText.distance(metersAway, useKm)
         binding.layoutNavigationHud.tvSpeedLimit.text = route.speedLimit.toString()
 
-        val nextStep = route.steps.getOrNull(index + 1)
-        binding.layoutNavigationHud.tvNextManeuverPreview.text = if (nextStep != null) {
-            "Then: ${nextStep.instruction}"
-        } else {
-            "Arriving at destination: ${route.destinationName}"
+        val after = steps.getOrNull(index + 2)
+        binding.layoutNavigationHud.tvNextManeuverPreview.text = when {
+            upcoming == null -> "You are on the last part of the route"
+            after != null -> "Then: ${after.instruction}"
+            else -> "Then: arrive at ${route.destinationName}"
         }
 
-        val progress = ((index + 1) * 100) / route.steps.size
-        binding.layoutTripStatusBar.tripProgressBar.progress = progress
+        if (progress == null) {
+            // no GPS position yet, so show the progress by step and bring the step into view
+            binding.layoutTripStatusBar.tripProgressBar.progress = ((index + 1) * 100) / steps.size
+            binding.mapView.controller.animateTo(GeoPoint(step.startLat, step.startLng))
+            binding.mapView.controller.setZoom(16.0)
+        }
 
-        val stepPoint = GeoPoint(step.startLat, step.startLng)
-        binding.mapView.controller.animateTo(stepPoint)
-        binding.mapView.controller.setZoom(16.0)
+        if (index != lastSpokenStep) {
+            lastSpokenStep = index
+            val voiceOn = settings.getToggle(SettingsManager.KEY_TURN_BY_TURN) && viewModel.isVoiceMuted.value != true
+            if (voiceOn) {
+                speakText("In ${NavigationText.distance(metersAway, useKm)}, ${instruction.replaceFirstChar { it.lowercase() }}")
+            }
+        }
     }
 
     private fun clearRouteDisplay() {
@@ -1023,11 +1133,15 @@ class MapFragment : Fragment() {
         if (::locationOverlay.isInitialized) {
             locationOverlay.enableMyLocation()
         }
+        applyMapStyle()
+        navHandler.removeCallbacks(navTicker)
+        navHandler.post(navTicker)
         viewModel.refreshIncidents()
     }
 
     override fun onPause() {
         super.onPause()
+        navHandler.removeCallbacks(navTicker)
         binding.mapView.onPause()
         if (::locationOverlay.isInitialized) {
             locationOverlay.disableMyLocation()
