@@ -16,7 +16,9 @@ import com.google.android.material.chip.Chip
 import com.routewise.sa.R
 import com.routewise.sa.RouteWiseApplication
 import com.routewise.sa.data.model.IncidentEntity
+import com.routewise.sa.data.SettingsManager
 import com.routewise.sa.databinding.FragmentLiveAlertsBinding
+import com.routewise.sa.util.HazardFilter
 import com.routewise.sa.ui.ViewModelFactory
 import com.routewise.sa.ui.map.MapViewModel
 
@@ -145,7 +147,12 @@ class LiveAlertsFragment : Fragment() {
             else -> "All"
         }
 
-        val filtered = fullList.filter { incident ->
+        // The accident / police / roadwork switches in Settings also decide what the feed lists
+        val allowedByTypeSettings = HazardFilter.visibleInFeed(
+            fullList, SettingsManager(requireContext()).hazardPreferences()
+        )
+
+        val filtered = allowedByTypeSettings.filter { incident ->
             val isWithin12Hours = incident.timestamp >= twelveHoursAgo
 
             val matchesQuery = incident.roadName.lowercase().contains(query) || 

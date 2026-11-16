@@ -9,3 +9,7 @@
 *.apk
 *.aar
 RouteWiseSA-Android-Kotlin/
+# Release signing key and passwords: never commit
+keystore.properties
+*.jks
+*.keystore

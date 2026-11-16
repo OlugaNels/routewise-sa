@@ -116,15 +116,6 @@
             <View android:layout_width="match_parent" android:layout_height="1dp"
                 android:background="#1e293b" android:layout_marginVertical="12dp" />
 
-            <include
-                android:id="@+id/settingSpeedWarnings"
-                layout="@layout/layout_item_settings_switch"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
-
-            <View android:layout_width="match_parent" android:layout_height="1dp"
-                android:background="#1e293b" android:layout_marginVertical="12dp" />
-
             <!-- Unit Selector -->
             <LinearLayout
                 android:layout_width="match_parent"
@@ -217,6 +208,32 @@
                 layout="@layout/layout_item_settings_switch"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content" />
+        </LinearLayout>
+
+        <!-- Section 3: HAZARD ALERTS & NOTIFICATIONS (1.2.0) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_card_unselected"
+            android:orientation="vertical"
+            android:padding="16dp"
+            android:layout_marginBottom="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="HAZARD ALERTS &amp; NOTIFICATIONS"
+                android:textColor="#94a3b8"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.05"
+                android:layout_marginBottom="12dp" />
+
+            <include
+                android:id="@+id/settingHazardNotifications"
+                layout="@layout/layout_item_settings_switch"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
 
             <View android:layout_width="match_parent" android:layout_height="1dp"
                 android:background="#1e293b" android:layout_marginVertical="12dp" />
@@ -244,6 +261,114 @@
                 layout="@layout/layout_item_settings_switch"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content" />
+        </LinearLayout>
+
+        <!-- Section 4: ACCOUNT & SECURITY (1.2.0) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_card_unselected"
+            android:orientation="vertical"
+            android:padding="16dp"
+            android:layout_marginBottom="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="ACCOUNT &amp; SECURITY"
+                android:textColor="#94a3b8"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.05"
+                android:layout_marginBottom="12dp" />
+
+            <Button
+                android:id="@+id/btnEditProfile"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:background="@drawable/bg_rounded_slate"
+                android:text="Edit my profile"
+                android:textColor="#34d399"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                app:backgroundTint="@null" />
+
+            <TextView
+                android:id="@+id/tvPasswordGoogleNote"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="You signed in with Google, so your password is managed by your Google account."
+                android:textColor="#94a3b8"
+                android:textSize="12sp"
+                android:layout_marginTop="12dp"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:id="@+id/layoutChangePassword"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginTop="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="CHANGE PASSWORD"
+                    android:textColor="#94a3b8"
+                    android:textSize="10sp"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="4dp" />
+
+                <EditText
+                    android:id="@+id/etCurrentPassword"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:background="@drawable/bg_rounded_slate"
+                    android:hint="Current password"
+                    android:textColorHint="#64748b"
+                    android:textColor="#ffffff"
+                    android:textSize="14sp"
+                    android:paddingHorizontal="14dp"
+                    android:layout_marginBottom="8dp"
+                    android:inputType="textPassword" />
+
+                <EditText
+                    android:id="@+id/etNewPassword"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:background="@drawable/bg_rounded_slate"
+                    android:hint="New password (6 to 64 characters)"
+                    android:textColorHint="#64748b"
+                    android:textColor="#ffffff"
+                    android:textSize="14sp"
+                    android:paddingHorizontal="14dp"
+                    android:layout_marginBottom="8dp"
+                    android:inputType="textPassword" />
+
+                <EditText
+                    android:id="@+id/etConfirmPassword"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:background="@drawable/bg_rounded_slate"
+                    android:hint="Confirm new password"
+                    android:textColorHint="#64748b"
+                    android:textColor="#ffffff"
+                    android:textSize="14sp"
+                    android:paddingHorizontal="14dp"
+                    android:layout_marginBottom="12dp"
+                    android:inputType="textPassword" />
+
+                <Button
+                    android:id="@+id/btnChangePassword"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:background="@drawable/bg_rounded_emerald"
+                    android:text="Change password"
+                    android:textColor="#020617"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    app:backgroundTint="@null" />
+            </LinearLayout>
         </LinearLayout>
 
     </LinearLayout>

@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
+import android.util.Log
 import android.os.Handler
 import android.os.Looper
 import android.view.View
@@ -45,7 +46,16 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
+/**
+ * Sign in, create account, Google sign-in and forgot-password screen.
+ * All accounts are handled by Firebase Authentication, so passwords are never stored by the app.
+ * Reference: Google (n.d.) Firebase Authentication. https://firebase.google.com/docs/auth
+ */
 class LoginActivity : AppCompatActivity() {
+
+    private companion object {
+        const val TAG = "LoginActivity"
+    }
 
     private lateinit var sessionManager: SessionManager
     private var isRegistering = false
@@ -87,6 +97,7 @@ class LoginActivity : AppCompatActivity() {
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode != Activity.RESULT_OK || result.data == null) {
+            Log.i(TAG, "Google sign-in cancelled by the user")
             setBusy(false)
             toast("Google sign-in was cancelled")
             return@registerForActivityResult
@@ -116,6 +127,7 @@ class LoginActivity : AppCompatActivity() {
                     toast(authErrorMessage(e))
                 }
         } catch (e: ApiException) {
+            Log.e(TAG, "Google sign-in failed, status code ${e.statusCode}")
             setBusy(false)
             toast("Google sign-in failed (code ${e.statusCode}). Check your connection and try again.")
         }
@@ -220,6 +232,7 @@ class LoginActivity : AppCompatActivity() {
             btnSendResetCode.isEnabled = false
             firebaseAuth.sendPasswordResetEmail(email)
                 .addOnSuccessListener {
+                    Log.i(TAG, "Password reset email requested")
                     btnSendResetCode.isEnabled = true
                     toast("If $email has a password account, a reset link has been sent (check spam too). If you signed up with Google, use Sign in with Google instead.")
                     closeResetPanel()
@@ -281,6 +294,7 @@ class LoginActivity : AppCompatActivity() {
         }
 
         setBusy(true)
+        Log.d(TAG, "Submitting ${if (isRegistering) "registration" else "sign in"} to Firebase Authentication")
         if (isRegistering) {
             firebaseAuth.createUserWithEmailAndPassword(email, password)
                 .addOnSuccessListener { result ->
@@ -359,10 +373,17 @@ class LoginActivity : AppCompatActivity() {
         }
 
         sessionManager.saveUser(user.uid, email, name, phone, province, city)
+        Log.i(TAG, "Signed in (provider = $provider, mode = ${if (isRegistering) "register" else "sign in"})")
         showSuccessSplash(name)
     }
 
-    private fun authErrorMessage(e: Exception): String = when (e) {
+    private fun authErrorMessage(e: Exception): String {
+        // Log the kind of failure only: never the email or password the user typed
+        Log.w(TAG, "Authentication request failed: ${e.javaClass.simpleName}")
+        return authMessageFor(e)
+    }
+
+    private fun authMessageFor(e: Exception): String = when (e) {
         is FirebaseAuthUserCollisionException -> "An account with this email already exists (it may have been created with Google). Use Sign In or Sign in with Google instead."
         is FirebaseAuthWeakPasswordException -> "That password is too weak. Use at least ${InputValidator.MIN_PASSWORD_LENGTH} characters."
         is FirebaseAuthInvalidUserException -> "No account found for this email. Create an account first."

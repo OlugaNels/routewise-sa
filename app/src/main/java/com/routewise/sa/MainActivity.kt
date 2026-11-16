@@ -1,9 +1,15 @@
 package com.routewise.sa
 
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.GravityCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import com.routewise.sa.service.HazardNotifier
+import kotlinx.coroutines.launch
 import androidx.navigation.NavController
 import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.ui.AppBarConfiguration
@@ -11,7 +17,12 @@ import androidx.navigation.ui.NavigationUI
 import androidx.navigation.ui.setupWithNavController
 import com.routewise.sa.databinding.ActivityMainBinding
 
+/** Hosts the navigation drawer, bottom navigation bar and every screen after sign-in. */
 class MainActivity : AppCompatActivity() {
+
+    private companion object {
+        const val TAG = "MainActivity"
+    }
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var navController: NavController
@@ -80,6 +91,8 @@ class MainActivity : AppCompatActivity() {
         // The Alerts tab used to show a fixed "8" badge, which was not real data
         binding.bottomNavigationView.removeBadge(R.id.navigation_alerts)
 
+        startHazardNotifications()
+
         // Drawer custom item clicks
         binding.navigationView.setNavigationItemSelectedListener { menuItem ->
             when (menuItem.itemId) {
@@ -122,6 +135,25 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    /**
+     * Watches the live incident list while the app is on screen and notifies the driver about new hazards
+     * (version 1.2.0). repeatOnLifecycle stops the collection when the app goes to the background.
+     */
+    private fun startHazardNotifications() {
+        val notifier = HazardNotifier(applicationContext)
+        val repository = (application as RouteWiseApplication).incidentRepository
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                try {
+                    repository.getIncidents(null).collect { notifier.onIncidents(it) }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Hazard notification watcher stopped: ${e.message}")
+                }
+            }
+        }
+        Log.d(TAG, "Hazard notification watcher started")
     }
 
     override fun onSupportNavigateUp(): Boolean {

@@ -81,4 +81,21 @@ class InputValidatorTest {
     @Test fun normalRoadNameIsAccepted() = assertTrue(InputValidator.isValidRoadName("N1 Ben Schoeman"))
 
     @Test fun veryLongRoadNameIsRejected() = assertFalse(InputValidator.isValidRoadName("R".repeat(101)))
+
+    // ---- Change password form (Settings, version 1.2.0) ----
+
+    @Test fun changePasswordEmptyCurrentIsRejected() =
+        assertEquals("Enter your current password", InputValidator.changePasswordError("", "newpass1", "newpass1"))
+
+    @Test fun changePasswordShortNewPasswordIsRejected() =
+        assertEquals("Password must be at least 6 characters", InputValidator.changePasswordError("oldpass", "123", "123"))
+
+    @Test fun changePasswordSameAsCurrentIsRejected() =
+        assertNotNull(InputValidator.changePasswordError("samepass1", "samepass1", "samepass1"))
+
+    @Test fun changePasswordMismatchIsRejected() =
+        assertEquals("The two new passwords do not match", InputValidator.changePasswordError("oldpass", "newpass1", "newpass2"))
+
+    @Test fun changePasswordValidFormIsAccepted() =
+        assertNull(InputValidator.changePasswordError("oldpass", "newpass1", "newpass1"))
 }

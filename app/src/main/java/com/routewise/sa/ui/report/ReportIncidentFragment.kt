@@ -1,5 +1,6 @@
 package com.routewise.sa.ui.report
 
+import android.util.Log
 import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -46,7 +47,15 @@ import org.json.JSONObject
 import java.net.URLEncoder
 import java.util.Locale
 
+/**
+ * Three-step "Report a hazard" screen. Input is validated by [InputValidator] before the report is
+ * saved on the phone (Room) and published to Cloud Firestore through the ViewModel and repository.
+ */
 class ReportIncidentFragment : Fragment() {
+
+    private companion object {
+        const val TAG = "ReportIncident"
+    }
 
     private val viewModel: ReportIncidentViewModel by viewModels {
         val app = requireActivity().application as RouteWiseApplication
@@ -631,6 +640,7 @@ class ReportIncidentFragment : Fragment() {
                 val r1 = etRoad1.text.toString().trim()
                 val r2 = etRoad2.text.toString().trim()
                 if (r1.isEmpty() || r2.isEmpty()) {
+                    Log.w(TAG, "Report rejected: one of the two roads is empty")
                     Toast.makeText(requireContext(), "Please enter both Primary Road 1 & Intersecting Road 2", Toast.LENGTH_SHORT).show()
                     return@setOnClickListener
                 }
@@ -638,6 +648,7 @@ class ReportIncidentFragment : Fragment() {
             } else {
                 val r = etRoadName.text.toString().trim()
                 if (r.isEmpty()) {
+                    Log.w(TAG, "Report rejected: road name is empty")
                     etRoadName.error = "Road Name / Intersection is required"
                     etRoadName.requestFocus()
                     return@setOnClickListener
@@ -656,6 +667,7 @@ class ReportIncidentFragment : Fragment() {
                 return@setOnClickListener
             }
 
+            Log.i(TAG, "Publishing incident report: type = $selectedType, severity = $selectedSeverity")
             viewModel.reportHazard(
                 type = selectedType,
                 roadName = road,

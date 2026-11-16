@@ -1,5 +1,6 @@
 package com.routewise.sa.ui.profile
 
+import android.util.Log
 import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -16,7 +17,15 @@ import com.routewise.sa.ui.auth.LoginActivity
 import com.routewise.sa.util.InputValidator
 import java.util.Locale
 
+/**
+ * "My Profile" screen: the signed-in driver can edit their name, phone, vehicle and number plate.
+ * Input is checked by [InputValidator]; the result is saved on the phone and merged into the Firestore user document.
+ */
 class ProfileFragment : Fragment() {
+
+    private companion object {
+        const val TAG = "ProfileFragment"
+    }
 
     private var _binding: FragmentProfileBinding? = null
     private val profileBinding get() = _binding!!
@@ -44,6 +53,7 @@ class ProfileFragment : Fragment() {
         profileBinding.btnSaveProfile.setOnClickListener { saveProfile() }
 
         profileBinding.btnLogout.setOnClickListener {
+            Log.i(TAG, "User logged out")
             sessionManager.logout()
             FirebaseAuth.getInstance().signOut()
             Toast.makeText(requireContext(), "Logged out of RouteWise SA", Toast.LENGTH_SHORT).show()
@@ -64,12 +74,15 @@ class ProfileFragment : Fragment() {
 
         profileBinding.etFullName.error = null
         profileBinding.etPhone.error = null
+        Log.d(TAG, "Save profile tapped")
         if (!InputValidator.isValidName(name)) {
+            Log.w(TAG, "Profile rejected: invalid name")
             profileBinding.etFullName.error = "Enter your full name (2 to ${InputValidator.MAX_NAME_LENGTH} characters)"
             profileBinding.etFullName.requestFocus()
             return
         }
         if (!InputValidator.isValidOptionalPhone(phone)) {
+            Log.w(TAG, "Profile rejected: invalid phone number")
             profileBinding.etPhone.error = "Enter a valid phone number, e.g. +27 82 456 7890"
             profileBinding.etPhone.requestFocus()
             return
@@ -96,10 +109,12 @@ class ProfileFragment : Fragment() {
                     ),
                     SetOptions.merge()
                 )
-            } catch (_: Exception) {
+            } catch (e: Exception) {
                 // Saved on the phone already
+                Log.e(TAG, "Firestore profile update failed: ${e.message}")
             }
         }
+        Log.i(TAG, "Profile saved on the phone and sent to Firestore")
         Toast.makeText(requireContext(), "Profile saved", Toast.LENGTH_SHORT).show()
     }
 

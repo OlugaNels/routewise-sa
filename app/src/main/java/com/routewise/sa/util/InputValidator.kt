@@ -49,6 +49,18 @@ object InputValidator {
         else -> null
     }
 
+    /**
+     * Checks the three fields of the Settings "Change password" form (added in 1.2.0).
+     * Returns the first problem found as a message for the user, or null when the form is valid.
+     */
+    fun changePasswordError(current: String, new: String, confirm: String): String? = when {
+        current.isEmpty() -> "Enter your current password"
+        passwordError(new) != null -> passwordError(new)
+        new == current -> "Your new password must be different from the current one"
+        confirm != new -> "The two new passwords do not match"
+        else -> null
+    }
+
     /** Returns an error message for the password field, or null when it is valid. */
     fun passwordError(password: String): String? = when {
         password.isEmpty() -> "Enter your password"

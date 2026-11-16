@@ -1,5 +1,6 @@
 package com.routewise.sa.ui.map
 
+import android.util.Log
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
@@ -169,9 +170,11 @@ class MapViewModel(
         avoidTolls: Boolean,
         isReroute: Boolean
     ) {
+        Log.d(TAG, "Requesting road route to \"$destinationName\" (reroute = $isReroute)")
         val result = directionsRepository.getRoadRoute(originPoint, destPoint)
         val dirRoute = result.getOrNull()
         if (dirRoute == null || dirRoute.polylinePoints.size < 2 || dirRoute.steps.isEmpty()) {
+            Log.w(TAG, "No usable route returned: ${result.exceptionOrNull()?.message ?: "empty route"}")
             _routeError.postValue("Could not get a road route to $destinationName. Check your internet connection and try again.")
             return
         }
@@ -207,6 +210,7 @@ class MapViewModel(
             speedLimit = if (dirRoute.totalDistanceMeters > 20000) 120 else 60
         )
 
+        Log.i(TAG, "Route ready: ${calculated.totalDistanceMeters} m, ${calculated.steps.size} steps")
         routeDestination = destPoint
         buildTracker(calculated)
         offRouteCount = 0
@@ -293,6 +297,7 @@ class MapViewModel(
 
     private fun reroute(from: GeoPoint, destinationName: String) {
         val dest = routeDestination ?: return
+        Log.i(TAG, "Driver left the route, calculating a new route")
         rerouting = true
         lastRerouteAt = System.currentTimeMillis()
         viewModelScope.launch {
@@ -388,6 +393,7 @@ class MapViewModel(
     }
 
     private companion object {
+        const val TAG = "MapViewModel"
         const val OFF_ROUTE_METERS = 60.0
         const val OFF_ROUTE_FIXES = 4
         const val ARRIVAL_METERS = 40.0

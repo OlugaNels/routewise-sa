@@ -37,7 +37,9 @@ import com.routewise.sa.data.model.IncidentEntity
 import com.routewise.sa.data.repository.CalculatedRoute
 import com.routewise.sa.databinding.FragmentMapBinding
 import com.routewise.sa.ui.ViewModelFactory
+import com.routewise.sa.util.HazardFilter
 import com.routewise.sa.util.NavigationText
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -875,9 +877,16 @@ class MapFragment : Fragment() {
         }
     }
 
-    private fun displayIncidentsOnMap(incidents: List<IncidentEntity>) {
+    /**
+     * Draws incident markers. The "Live Hazard Layer" and the accident / police / roadwork switches in
+     * Settings decide which ones appear (HazardFilter), so a change in Settings shows on the map at once.
+     */
+    private fun displayIncidentsOnMap(allIncidents: List<IncidentEntity>) {
         incidentMarkers.forEach { binding.mapView.overlays.remove(it) }
         incidentMarkers.clear()
+
+        val incidents = HazardFilter.visibleOnMap(allIncidents, settings.hazardPreferences())
+        Log.d("MapFragment", "Showing ${incidents.size} of ${allIncidents.size} incidents on the map")
 
         val userLocation = getCurrentUserLocation()
 
@@ -1134,6 +1143,8 @@ class MapFragment : Fragment() {
             locationOverlay.enableMyLocation()
         }
         applyMapStyle()
+        // Settings may have changed while the map was in the background, so redraw the hazard markers
+        viewModel.incidents.value?.let { displayIncidentsOnMap(it) }
         navHandler.removeCallbacks(navTicker)
         navHandler.post(navTicker)
         viewModel.refreshIncidents()
