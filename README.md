@@ -8,9 +8,7 @@ Real-time road alert Android app for Gauteng, South Africa. Built with Kotlin, F
 
 **Module:** XISD6329w | **Group 2** | Task 3: Final submission (version 1.2.0)
 
-**Videos**
-- Task 3 feature video (voice-over, all features, logging in Logcat): <!-- TODO: paste the unlisted YouTube link here once the Task 3 video is uploaded -->
-- Task 2 demonstration video: https://youtu.be/6SSjHJxOnwA
+**Watch the demonstration video:** https://youtu.be/6SSjHJxOnwA
 
 ## Screenshots
 
